@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>給与管理システム (GitHub経由版)</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  
+  <style>
+    body { background-color: #f4f6f9; font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", sans-serif; }
+    .navbar-brand { font-weight: bold; letter-spacing: 1px; }
+    .card { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    .card-header { background-color: #fff; border-bottom: 1px solid #edf2f9; font-weight: bold; color: #333; }
+    .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; display: none; }
+  </style>
+</head>
+<body onmousemove="handleUserActivity()" onclick="handleUserActivity()" onkeypress="handleUserActivity()">
+
+  <div id="loading" class="loading-overlay">
+    <div class="text-center">
+      <div class="spinner-border text-primary" role="status"></div>
+      <div class="mt-2 font-weight-bold">処理中...</div>
+    </div>
+  </div>
+
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#"><i class="fa-solid fa-calculator me-2"></i>給与管理システム (GitHub Portal)</a>
+    </div>
+  </nav>
+
+  <div class="container mt-4">
+    <div class="row">
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-header"><i class="fa-solid fa-filter me-2"></i>データ連携条件選択</div>
+          <div class="card-body">
+            <form id="sync-form">
+              <div class="mb-3">
+                <label class="form-label font-weight-bold">対象月度</label>
+                <input type="month" id="report-month" class="form-control" value="2026-06">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">店舗名</label>
+                <select id="report-store" class="form-select">
+                  <option value="Shinbei">Shinbei (しんべい)</option>
+                  <option value="Otaruzaka">Otaruzaka (おたる坂)</option>
+                  <option value="Zen">Zen (然)</option>
+                  <option value="Tsurukichi">Tsurukichi (鶴吉)</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">対象スタッフ</label>
+                <select id="report-name" class="form-select">
+                  <option value="すべてのスタッフ">※ 店舗の全スタッフ一括</option>
+                  <option value="高濱 芳子">高濱 芳子</option>
+                </select>
+              </div>
+              
+              <div class="d-grid gap-2">
+                <button type="button" class="btn btn-primary font-weight-bold" onclick="syncAttendanceToSalary()">
+                  <i class="fa-solid fa-cloud-arrow-down me-2"></i>勤怠データ取得・同期
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-8">
+        <div class="card">
+          <div class="card-header"><i class="fa-solid fa-info-circle me-2"></i>GitHub 経由のシステム運用</div>
+          <div class="card-body">
+            <h5>🌐 現在の状態: GitHub ホスティング運用中</h5>
+            <p>この画面はGitHubから配信されており、裏側のスプレッドシート処理のみをGASのAPI経由で呼び出しています。</p>
+            <hr>
+            <h6>💡 使い方</h6>
+            <ol class="lh-lg">
+              <li>左側のメニューから条件を選択します。</li>
+              <li>「勤怠データ取得・同期」ボタンを押すと、安全に通信が行われます。</li>
+            </ol>
+            <div class="alert alert-success mt-3" role="alert">
+              <i class="fa-solid fa-shield-halved me-2"></i>
+              CORSセキュリティ対応済み。外部サーバー（GitHub）からのリクエストをスプレッドシート側が正常に受け付けます。
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ⚠️重要：ここにGAS側で「デプロイ」した際に発行される「ウェブアプリのURL」を貼り付けてください！
+    const GAS_API_URL = "https://script.google.com/macros/s/XXXXX/exec"; 
+
+    function showLoading(display) {
+      document.getElementById("loading").style.display = display ? "flex" : "none";
+    }
+
+    /**
+     * 🌐 GitHubからGASへ fetch を使って通信する共通関数
+     */
+    async function callGas(action, data = {}) {
+      if (!GAS_API_URL || GAS_API_URL.includes("XXXXX")) {
+        alert("エラー: index.html の先頭にある『GAS_API_URL』が正しく設定されていません。");
+        return { success: false, error: "URL未設定" };
+      }
+
+      const response = await fetch(GAS_API_URL, {
+        method: "POST",
+        mode: "cors", // クロスドメイン許可設定
+        headers: {
+          "Content-Type": "text/plain" // GASで受け取るための標準形式
+        },
+        body: JSON.stringify({ action, ...data })
+      });
+      return await response.json();
+    }
+
+    /**
+     * 📊 勤怠データを給与スプレッドシートに同期・コピーする
+     */
+    async function syncAttendanceToSalary() {
+      const rawMonth = document.getElementById("report-month").value;
+      if (!rawMonth) {
+        alert("対象の月度を選択してください。");
+        return;
+      }
+      const month = rawMonth.replace("-", "/");
+      const store = document.getElementById("report-store").value;
+      const name = document.getElementById("report-name").value;
+
+      const confirmMsg = `${month} 度 【${store} / ${name}】 の勤怠データを取得し、\n給与スプレッドシートへ同期します。よろしいですか？`;
+      if (!confirm(confirmMsg)) return;
+
+      showLoading(true);
+      try {
+        const res = await callGas("importWorkReport", {
+          month: month,
+          store: store,
+          name: name
+        });
+        
+        showLoading(false);
+        if (res.success) {
+          alert("同期成功:\n" + res.message);
+        } else {
+          alert("同期エラー:\n" + res.error);
+        }
+      } catch (e) {
+        showLoading(false);
+        console.error(e);
+        alert("通信エラーが発生しました。GASが新しくWebアプリとしてデプロイされているか確認してください。");
+      }
+    }
+
+    function handleUserActivity() {
+      if (typeof resetTimeoutTimer === "function") {
+        resetTimeoutTimer();
+      }
+    }
+  </script>
+</body>
+</html>
