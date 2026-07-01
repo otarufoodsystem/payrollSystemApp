@@ -136,7 +136,7 @@
     // ==========================================
     // ⚙️ 【管理設定】ここでシステムを一元管理します
     // ==========================================
-    const APP_VERSION = "v1.0.1"; // 👈 今後はここを変更するだけで全画面が切り替わります
+    const APP_VERSION = "v1.0.2"; // 👈 今後はここを変更するだけで全画面が切り替わります
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxjY_zgSOWTUrA4mBnoWBoCeCfWV7Mtfv7LZ-dJeeGgLUJCRCM2LF-E9MP9MZ-Hz-8R/exec"; // ⚠️実際のURLを設定してください
 
     let timeoutTimer = null;
@@ -200,14 +200,17 @@
       showLoading(true);
 
       try {
-        const hashedPassword = await hashPassword(pwInput);
-        const res = await callGas("login", { username: idInput, password: hashedPassword });
+        // 🎯【修正】事前ハッシュ化（hashPassword）をコメントアウトまたは削除し、生のpwInputをそのまま送る
+        // const hashedPassword = await hashPassword(pwInput); 
+        
+        // 🎯 password: に「pwInput」を直接指定してGASを呼び出します
+        const res = await callGas("login", { username: idInput, password: pwInput });
         
         showLoading(false);
         if (res.success) {
           sessionStorage.setItem("salary_logged_in", "true");
           sessionStorage.setItem("salary_username", idInput);
-          sessionStorage.setItem("salary_password", hashedPassword);
+          sessionStorage.setItem("salary_password", pwInput); // 🎯 ここもpwInputに変更
           showMainApp();
         } else {
           errorDiv.innerText = res.error || "ログインに失敗しました。";
