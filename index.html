@@ -2,16 +2,16 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>給与管理システム (GitHub経由版)</title>
+  <title>給与管理システム</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   
   <style>
-    body { background-color: #f4f6f9; font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", sans-serif; }
-    .navbar-brand { font-weight: bold; letter-spacing: 1px; }
-    .card { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
-    .card-header { background-color: #fff; border-bottom: 1px solid #edf2f9; font-weight: bold; color: #333; }
+    body { background-color: #f4f6f9; font-family: "Helvetica Neue", Arial, sans-serif; }
     .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; display: none; }
+    .login-container { max-width: 400px; margin: 100px auto auto; }
+    #main-app { display: none; }
   </style>
 </head>
 <body onmousemove="handleUserActivity()" onclick="handleUserActivity()" onkeypress="handleUserActivity()">
@@ -19,69 +19,112 @@
   <div id="loading" class="loading-overlay">
     <div class="text-center">
       <div class="spinner-border text-primary" role="status"></div>
-      <div class="mt-2 font-weight-bold">処理中...</div>
+      <div class="mt-2 fw-bold">通信中...</div>
     </div>
   </div>
 
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="#"><i class="fa-solid fa-calculator me-2"></i>給与管理システム (GitHub Portal)</a>
+  <div id="login-view" class="container">
+    <div class="card login-container shadow">
+      <div class="card-header bg-dark text-white text-center py-3">
+        <h5 class="mb-0"><i class="fa-solid fa-lock me-2"></i>給与管理システム ログイン</h5>
+        <small id="login-version" class="text-muted" style="font-size: 0.75rem; color: #a0aec0 !important;"></small>
+      </div>
+      <div class="card-body p-4">
+        <div id="login-error" class="alert alert-danger d-none"></div>
+        <form id="login-form" onsubmit="executeLogin(event)">
+          <div class="mb-3">
+            <label class="form-label">管理用ユーザーID</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="fa-solid fa-user"></i></span>
+              <input type="text" id="login-id" class="form-control" required autocomplete="username">
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label">パスワード</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="fa-solid fa-key"></i></span>
+              <input type="password" id="login-pw" class="form-control" required autocomplete="current-password">
+            </div>
+          </div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary fw-bold py-2">
+              <i class="fa-solid fa-right-to-bracket me-2"></i>ログイン
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
-  </nav>
+  </div>
 
-  <div class="container mt-4">
-    <div class="row">
-      <div class="col-md-4">
-        <div class="card">
-          <div class="card-header"><i class="fa-solid fa-filter me-2"></i>データ連携条件選択</div>
-          <div class="card-body">
-            <form id="sync-form">
-              <div class="mb-3">
-                <label class="form-label font-weight-bold">対象月度</label>
-                <input type="month" id="report-month" class="form-control" value="2026-06">
-              </div>
-              <div class="mb-3">
-                <label class="form-label">店舗名</label>
-                <select id="report-store" class="form-select">
-                  <option value="Shinbei">Shinbei (しんべい)</option>
-                  <option value="Otaruzaka">Otaruzaka (おたる坂)</option>
-                  <option value="Zen">Zen (然)</option>
-                  <option value="Tsurukichi">Tsurukichi (鶴吉)</option>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">対象スタッフ</label>
-                <select id="report-name" class="form-select">
-                  <option value="すべてのスタッフ">※ 店舗の全スタッフ一括</option>
-                  <option value="高濱 芳子">高濱 芳子</option>
-                </select>
-              </div>
-              
-              <div class="d-grid gap-2">
-                <button type="button" class="btn btn-primary font-weight-bold" onclick="syncAttendanceToSalary()">
-                  <i class="fa-solid fa-cloud-arrow-down me-2"></i>勤怠データ取得・同期
-                </button>
-              </div>
-            </form>
+  <div id="main-app">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">
+          <i class="fa-solid fa-calculator me-2"></i>給与管理・勤怠連携ポータル
+          <span id="app-version-badge" class="badge bg-secondary ms-2" style="font-size: 0.75rem; vertical-align: middle;"></span>
+        </a>
+        <span class="navbar-text me-3 d-none d-md-inline">
+          <i class="fa-solid fa-user-check me-1"></i>管理者 ログイン中
+        </span>
+        <button class="btn btn-outline-light btn-sm" onclick="executeLogout()">
+          <i class="fa-solid fa-right-from-bracket me-1"></i>ログアウト
+        </button>
+      </div>
+    </nav>
+
+    <div class="container mt-4">
+      <div class="row">
+        <div class="col-md-4">
+          <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white fw-bold text-secondary">
+              <i class="fa-solid fa-filter me-2"></i>連携条件選択
+            </div>
+            <div class="card-body">
+              <form id="sync-form">
+                <div class="mb-3">
+                  <label class="form-label fw-bold">対象月度</label>
+                  <input type="month" id="report-month" class="form-control" value="2026-06">
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">店舗名</label>
+                  <select id="report-store" class="form-select">
+                    <option value="Shinbei">Shinbei (しんべい)</option>
+                    <option value="Otaruzaka">Otaruzaka (おたる坂)</option>
+                    <option value="Zen">Zen (然)</option>
+                    <option value="Tsurukichi">Tsurukichi (鶴吉)</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">対象スタッフ</label>
+                  <select id="report-name" class="form-select">
+                    <option value="すべてのスタッフ">※ 店舗の全スタッフ一括</option>
+                    <option value="高濱 芳子">高濱 芳子</option>
+                  </select>
+                </div>
+                <div class="d-grid gap-2">
+                  <button type="button" class="btn btn-primary fw-bold" onclick="syncAttendanceToSalary()">
+                    <i class="fa-solid fa-cloud-arrow-down me-2"></i>勤怠データ取得・同期
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="col-md-8">
-        <div class="card">
-          <div class="card-header"><i class="fa-solid fa-info-circle me-2"></i>GitHub 経由のシステム運用</div>
-          <div class="card-body">
-            <h5>🌐 現在の状態: GitHub ホスティング運用中</h5>
-            <p>この画面はGitHubから配信されており、裏側のスプレッドシート処理のみをGASのAPI経由で呼び出しています。</p>
-            <hr>
-            <h6>💡 使い方</h6>
-            <ol class="lh-lg">
-              <li>左側のメニューから条件を選択します。</li>
-              <li>「勤怠データ取得・同期」ボタンを押すと、安全に通信が行われます。</li>
-            </ol>
-            <div class="alert alert-success mt-3" role="alert">
-              <i class="fa-solid fa-shield-halved me-2"></i>
-              CORSセキュリティ対応済み。外部サーバー（GitHub）からのリクエストをスプレッドシート側が正常に受け付けます。
+        <div class="col-md-8">
+          <div class="card shadow-sm">
+            <div class="card-header bg-white fw-bold text-secondary">
+              <i class="fa-solid fa-info-circle me-2"></i>運用ガイダンス
+            </div>
+            <div class="card-body">
+              <h5 class="card-title">🔐 セキュア運用モード</h5>
+              <p class="text-muted small">このシステムは、スプレッドシートの「設定」シートに登録された情報をもとに、通信を暗号化ハッシュで保護しています。また、10分間操作がない場合は安全のため自動ログアウトされます。</p>
+              <hr>
+              <h6>📊 勤怠コピー手順</h6>
+              <ol class="lh-lg text-secondary">
+                <li>左側メニューで条件を選び、同期ボタンをクリックします。</li>
+                <li>給与スプレッドシート内に「店舗名_氏名_年月」の専用シートが動的生成されます。</li>
+              </ol>
             </div>
           </div>
         </div>
@@ -90,35 +133,129 @@
   </div>
 
   <script>
-    // ⚠️重要：ここにGAS側で「デプロイ」した際に発行される「ウェブアプリのURL」を貼り付けてください！
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwYrbfMeq5eLxL7s3oGbYJMtuC0lUvILI04ZmLq6arAN5QhY8B54N-M-X4wKJ9ZaSW4/exec"; 
+    // ==========================================
+    // ⚙️ 【管理設定】ここでシステムを一元管理します
+    // ==========================================
+    const APP_VERSION = "v1.0.0"; // 👈 今後はここを変更するだけで全画面が切り替わります
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzseR3vXn7qNIU7BlAKwb7QZO6ZITOREADXgtIxDxLI-kISmKko4Y3jWpxubu9Fjuo1/exec"; // ⚠️実際のURLを設定してください
+
+    let timeoutTimer = null;
+    const TIMEOUT_DURATION = 10 * 60 * 1000; // 10分
+
+    // 起動時にバージョン情報を各画面の要素に自動挿入
+    window.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("login-version").innerText = APP_VERSION;
+      document.getElementById("app-version-badge").innerText = APP_VERSION;
+
+      if (sessionStorage.getItem("salary_logged_in") === "true") {
+        showMainApp();
+      }
+    });
 
     function showLoading(display) {
       document.getElementById("loading").style.display = display ? "flex" : "none";
     }
 
     /**
-     * 🌐 GitHubからGASへ fetch を使って通信する共通関数
+     * 文字列をSHA-256ハッシュに変換する（ブラウザ標準のCrypto API）
+     */
+    async function hashPassword(password) {
+      const msgBuffer = new TextEncoder().encode(password);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    /**
+     * 🌐 GAS API通信共通関数（認証情報を自動付与）
      */
     async function callGas(action, data = {}) {
       if (!GAS_API_URL || GAS_API_URL.includes("XXXXX")) {
-        alert("エラー: index.html の先頭にある『GAS_API_URL』が正しく設定されていません。");
+        alert("エラー: index.html 内の GAS_API_URL が未設定です。");
         return { success: false, error: "URL未設定" };
       }
 
+      const username = sessionStorage.getItem("salary_username") || data.username;
+      const password = sessionStorage.getItem("salary_password") || data.password;
+
       const response = await fetch(GAS_API_URL, {
         method: "POST",
-        mode: "cors", // クロスドメイン許可設定
-        headers: {
-          "Content-Type": "text/plain" // GASで受け取るための標準形式
-        },
-        body: JSON.stringify({ action, ...data })
+        mode: "cors",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ action, username, password, ...data })
       });
       return await response.json();
     }
 
     /**
-     * 📊 勤怠データを給与スプレッドシートに同期・コピーする
+     * 🔑 ログイン実行
+     */
+    async function executeLogin(event) {
+      event.preventDefault();
+      const idInput = document.getElementById("login-id").value.trim();
+      const pwInput = document.getElementById("login-pw").value.trim();
+      const errorDiv = document.getElementById("login-error");
+      
+      errorDiv.classList.add("d-none");
+      showLoading(true);
+
+      try {
+        const hashedPassword = await hashPassword(pwInput);
+        const res = await callGas("login", { username: idInput, password: hashedPassword });
+        
+        showLoading(false);
+        if (res.success) {
+          sessionStorage.setItem("salary_logged_in", "true");
+          sessionStorage.setItem("salary_username", idInput);
+          sessionStorage.setItem("salary_password", hashedPassword);
+          showMainApp();
+        } else {
+          errorDiv.innerText = res.error || "ログインに失敗しました。";
+          errorDiv.classList.remove("d-none");
+        }
+      } catch (err) {
+        showLoading(false);
+        errorDiv.innerText = "通信エラーが発生しました。";
+        errorDiv.classList.remove("d-none");
+        console.error(err);
+      }
+    }
+
+    /**
+     * 🚪 ログアウト実行
+     */
+    function executeLogout() {
+      sessionStorage.clear();
+      clearTimeout(timeoutTimer);
+      document.getElementById("main-app").style.display = "none";
+      document.getElementById("login-view").style.display = "block";
+      document.getElementById("login-form").reset();
+    }
+
+    function showMainApp() {
+      document.getElementById("login-view").style.display = "none";
+      document.getElementById("main-app").style.display = "block";
+      resetTimeoutTimer();
+    }
+
+    /**
+     * ⏳ 10分自動タイムアウト制御
+     */
+    function resetTimeoutTimer() {
+      if (sessionStorage.getItem("salary_logged_in") !== "true") return;
+      clearTimeout(timeoutTimer);
+      timeoutTimer = setTimeout(() => {
+        alert("長期間操作がなかったため、安全のため自動ログアウトしました。");
+        executeLogout();
+      }, TIMEOUT_DURATION);
+    }
+
+    function handleUserActivity() {
+      resetTimeoutTimer();
+    }
+
+    /**
+     * 📊 勤怠コピー連携
      */
     async function syncAttendanceToSalary() {
       const rawMonth = document.getElementById("report-month").value;
@@ -130,17 +267,11 @@
       const store = document.getElementById("report-store").value;
       const name = document.getElementById("report-name").value;
 
-      const confirmMsg = `${month} 度 【${store} / ${name}】 の勤怠データを取得し、\n給与スプレッドシートへ同期します。よろしいですか？`;
-      if (!confirm(confirmMsg)) return;
+      if (!confirm(`${month}度の勤怠データを給与シートへ同期します。よろしいですか？`)) return;
 
       showLoading(true);
       try {
-        const res = await callGas("importWorkReport", {
-          month: month,
-          store: store,
-          name: name
-        });
-        
+        const res = await callGas("importWorkReport", { month, store, name });
         showLoading(false);
         if (res.success) {
           alert("同期成功:\n" + res.message);
@@ -149,14 +280,7 @@
         }
       } catch (e) {
         showLoading(false);
-        console.error(e);
-        alert("通信エラーが発生しました。GASが新しくWebアプリとしてデプロイされているか確認してください。");
-      }
-    }
-
-    function handleUserActivity() {
-      if (typeof resetTimeoutTimer === "function") {
-        resetTimeoutTimer();
+        alert("通信エラーが発生しました。");
       }
     }
   </script>
