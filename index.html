@@ -97,7 +97,7 @@
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzzGL_VbdbySegoLEDf0psVoVBo0Lobz-o9XUzDr3aTZokM282xFyg3uX30SRuxSd2n/exec"; // 👈 最新のGASウェブアプリURL
-    const APP_VERSION = "1.0.9";
+    const APP_VERSION = "1.0.10";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -179,27 +179,36 @@
 
       showLoading(true);
       try {
+        // 💡 デバッグ用：送信直前のデータとURLを確認
+        alert("【デバッグ1】GASに送信します。\nURL: " + GAS_API_URL + "\nユーザー: " + user + "\nパスワード: " + pass);
+
         const response = await fetch(GAS_API_URL, {
           method: "POST",
           body: JSON.stringify({ action: "checkAuth", username: user, password: pass, appVersion: APP_VERSION })
         });
-        const resData = await response.json();
+        
+        // 💡 デバッグ用：GASから返ってきた生のテキストを確認
+        const rawText = await response.text();
+        alert("【デバッグ2】GASから届いた生の返答:\n" + rawText);
+
+        // テキストをJSONに変換
+        const resData = JSON.parse(rawText);
         showLoading(false);
 
         if(resData.success) {
+          alert("【デバッグ3】認証成功！画面を切り替えます。");
           localStorage.setItem("admin_saved_username", user);
           localStorage.setItem("admin_saved_password", pass);
           localStorage.setItem("admin_last_auth_time", Date.now().toString());
           document.getElementById("login-err-msg").style.display = "none";
           runAuthentication();
         } else {
-          // 💡 エラーメッセージをアラートで明示
-          alert("ログイン失敗:\n" + (resData.error || "ユーザー名またはパスワードが違います。"));
+          alert("【デバッグ4】認証失敗として判定されました。理由: " + (resData.error || "不明"));
           document.getElementById("login-err-msg").style.display = "block";
         }
       } catch(e) {
         showLoading(false);
-        alert("ログイン通信エラーが発生しました。\nGAS側が正しくデプロイされているか確認してください。");
+        alert("【デバッグ5】通信エラーまたは解析エラーが発生しました。\nエラー内容: " + e.message);
       }
     }
   
