@@ -10,7 +10,7 @@
     .navbar { background-color: #343a40; color: #fff; }
     .card { border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 8px; }
     .tab-btn { padding: 10px 20px; font-weight: bold; border: none; background: none; color: #6c757d; border-bottom: 3px solid transparent; }
-    .tab-btn.active { color: #007bff; border-bottom-3px-solid: #007bff; }
+    .tab-btn.active { color: #007bff; border-bottom: 3px solid #007bff; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
     #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 1.2rem; color: #007bff; }
@@ -96,10 +96,10 @@
     // ------------------------------------------------------------
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyRTro15g83r8C2wfBNMgavqJAcABoIQUWv0M2F0VqvAcC5joA2dnQwH9PlWLn-uAmE/exec"; // 👈 ご自身のGASウェブアプリURLに差し替えてください
-    const APP_VERSION = "1.0.2";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyRTro15g83r8C2wfBNMgavqJAcABoIQUWv0M2F0VqvAcC5joA2dnQwH9PlWLn-uAmE/exec"; // 👈 最新のGASウェブアプリURL
+    const APP_VERSION = "1.0.3";
     const TEN_MINUTES = 10 * 60 * 1000;
-    const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; // 🔒 給与管理用スプレッドシート
+    const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
     let currentUsername = "";
     let currentPassword = "";
@@ -107,7 +107,6 @@
     let globalStaffList = [];
     let globalStoreList = [];
 
-    // 起動時の初期セキュリティ認証
     const lastAuthTime = localStorage.getItem("admin_last_auth_time") || "0";
     window.addEventListener("DOMContentLoaded", runAuthentication);
 
@@ -123,8 +122,6 @@
       const now = Date.now();
   
       if (now - parseInt(lastAuthTime, 10) > TEN_MINUTES) {
-        currentUsername = "";
-        currentPassword = "";
         clearAuthStorage();
       }
       
@@ -152,7 +149,6 @@
             if (overlay) overlay.style.display = "none";
             if (mainApp) mainApp.style.display = "block";
             
-            // マスタデータの同期とフォーム初期化
             await loadStoreList();
             await loadStaffList();
             initSalaryForm();
@@ -179,7 +175,7 @@
     async function executeManualLogin() {
       const user = document.getElementById("login-user").value.trim();
       const pass = document.getElementById("login-pass").value.trim();
-      if(!user || !pass) return;
+      if(!user || !pass) { alert("ユーザー名とパスワードを入力してください。"); return; }
 
       showLoading(true);
       try {
@@ -197,11 +193,13 @@
           document.getElementById("login-err-msg").style.display = "none";
           runAuthentication();
         } else {
+          // 💡 エラーメッセージをアラートで明示
+          alert("ログイン失敗:\n" + (resData.error || "ユーザー名またはパスワードが違います。"));
           document.getElementById("login-err-msg").style.display = "block";
         }
       } catch(e) {
         showLoading(false);
-        alert("ログイン通信エラーが発生しました。");
+        alert("ログイン通信エラーが発生しました。\nGAS側が正しくデプロイされているか確認してください。");
       }
     }
   
@@ -215,7 +213,6 @@
   
     function triggerTimeout() {
       if (timeoutTimer) clearTimeout(timeoutTimer);
-      alert("セキュリティ保護のため、自動ログアウト（またはセッション終了）しました。");
       clearAuthStorage();
       currentUsername = "";
       currentPassword = "";
@@ -248,7 +245,8 @@
     // ------------------------------------------------------------
     async function callGas(action, data = null) {
       const savedUser = localStorage.getItem("admin_saved_username") || "";
-      const payload = { action: action, username: savedUser, password: currentPassword };
+      const savedPass = localStorage.getItem("admin_saved_password") || "";
+      const payload = { action: action, username: savedUser, password: savedPass };
       if (data !== null) payload.data = data;
   
       try {
@@ -342,7 +340,6 @@
       });
     }
   
-    // 🔄 給与計算用の勤怠データ取得
     async function fetchAttendanceForSalary() {
       const month = document.getElementById("salary-month").value;
       const store = document.getElementById("salary-store").value;
@@ -363,7 +360,6 @@
         showLoading(false);
         if (res.success) {
           alert(`サーバーからのメッセージ:\n${res.message}\n\nデータの取得が完了しました。`);
-          // ※ ここにテーブルレンダリングなどの処理を今後追記します。
         } else {
           alert("データ取得エラー: " + (res.error || "失敗しました"));
         }
