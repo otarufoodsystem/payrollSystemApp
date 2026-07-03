@@ -97,7 +97,7 @@
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzzGL_VbdbySegoLEDf0psVoVBo0Lobz-o9XUzDr3aTZokM282xFyg3uX30SRuxSd2n/exec"; // 👈 最新のGASウェブアプリURL
-    const APP_VERSION = "1.0.12";
+    const APP_VERSION = "1.0.13";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -134,11 +134,16 @@
         
         showLoading(true);
         try {
+          // 💡 デバッグ：通信直前
+          alert("【認証チェック開始】保存された情報でGASに確認します。");
+          
           const response = await fetch(GAS_API_URL, {
             method: "POST",
             body: JSON.stringify({ action: "checkAuth", username: savedUser, password: savedPass, appVersion: APP_VERSION })
           });
           const resData = await response.json(); 
+          
+          alert("【認証チェック結果】GASからの返答成功: " + JSON.stringify(resData));
           
           if (resData.success) {
             currentUsername = savedUser;
@@ -146,14 +151,13 @@
             localStorage.setItem("admin_last_auth_time", Date.now().toString());
             document.getElementById("current-user-display").innerText = currentUsername;
             
-            // 💡 デバッグ：ここからの進み具合を追跡
-            alert("【同期デバッグ1】認証OK。次に店舗マスタを読み込みます。");
+            alert("【同期ステージ1】認証OK。次に店舗マスタを読み込みます。");
             await loadStoreList();
             
-            alert("【同期デバッグ2】店舗マスタ読み込みOK。次にスタッフマスタを読み込みます。");
+            alert("【同期ステージ2】店舗マスタOK。次にスタッフマスタを読み込みます。");
             await loadStaffList();
             
-            alert("【同期デバッグ3】マスタ読み込みすべてOK。画面を切り替えます！");
+            alert("【同期ステージ3】マスタ読み込みすべてOK。画面を切り替えます！");
             if (overlay) overlay.style.display = "none";
             if (mainApp) mainApp.style.display = "block";
             
@@ -162,16 +166,18 @@
             resetTimeoutTimer();
             return;
           } else {
+            alert("【認証不承認】保存されたパスワードが違います。ストレージをクリアします。理由: " + resData.error);
             clearAuthStorage();
           }
         } catch (e) {
-          alert("【同期デバッグ・エラー】処理中にエラーが発生しました:\n" + e.message);
+          alert("【認証チェック・致命的エラー】通信または解析でコケました:\n" + e.message);
           if (overlay) overlay.innerText = "通信エラーが発生しました。リロードしてください。";
           showLoading(false);
           return;
         }
       }
   
+      alert("【ログイン待ち】認証情報がないため、ログイン画面を表示します。");
       if (overlay) overlay.style.display = "none";
       if (loginScreen) loginScreen.style.display = "flex";
       if (mainApp) mainApp.style.display = "none";
@@ -185,36 +191,32 @@
 
       showLoading(true);
       try {
-        // 💡 デバッグ用：送信直前のデータとURLを確認
-        alert("【デバッグ1】GASに送信します。\nURL: " + GAS_API_URL + "\nユーザー: " + user + "\nパスワード: " + pass);
-
+        alert("【手動ログイン1】GASへ送信します。");
         const response = await fetch(GAS_API_URL, {
           method: "POST",
           body: JSON.stringify({ action: "checkAuth", username: user, password: pass, appVersion: APP_VERSION })
         });
-        
-        // 💡 デバッグ用：GASから返ってきた生のテキストを確認
-        const rawText = await response.text();
-        alert("【デバッグ2】GASから届いた生の返答:\n" + rawText);
-
-        // テキストをJSONに変換
-        const resData = JSON.parse(rawText);
+        const resData = await response.json();
         showLoading(false);
 
+        alert("【手動ログイン2】返答受信: " + JSON.stringify(resData));
+
         if(resData.success) {
-          alert("【デバッグ3】認証成功！画面を切り替えます。");
+          alert("【手動ログイン3】認証成功！認証情報を記憶させて画面をリロードします。");
           localStorage.setItem("admin_saved_username", user);
           localStorage.setItem("admin_saved_password", pass);
           localStorage.setItem("admin_last_auth_time", Date.now().toString());
           document.getElementById("login-err-msg").style.display = "none";
-          runAuthentication();
+          
+          // 💡 確実に状態をリセットして再起動させるため、ページを強制リロードします
+          location.reload();
         } else {
-          alert("【デバッグ4】認証失敗として判定されました。理由: " + (resData.error || "不明"));
+          alert("【手動ログイン失敗】理由: " + (resData.error || "ユーザー名またはパスワードが違います。"));
           document.getElementById("login-err-msg").style.display = "block";
         }
       } catch(e) {
         showLoading(false);
-        alert("【デバッグ5】通信エラーまたは解析エラーが発生しました。\nエラー内容: " + e.message);
+        alert("【手動ログイン・通信エラー】\nエラー内容: " + e.message);
       }
     }
   
