@@ -97,7 +97,7 @@
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycby-0NvZCTdsGw9_iX4L2yBOYUdq7dXRetBnANY_i-ndx8ur5_UZLiK4BHLUlq_6Zywl/exec"; // 👈 最新のGASウェブアプリURL
-    const APP_VERSION = "1.0.15";
+    const APP_VERSION = "1.0.16";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -134,30 +134,20 @@
         
         showLoading(true);
         try {
-          // 💡 デバッグ：通信直前
-          alert("【認証チェック開始】保存された情報でGASに確認します。");
-          
           const response = await fetch(GAS_API_URL, {
             method: "POST",
             body: JSON.stringify({ action: "checkAuth", username: savedUser, password: savedPass, appVersion: APP_VERSION })
           });
           const resData = await response.json(); 
-          
-          alert("【認証チェック結果】GASからの返答成功: " + JSON.stringify(resData));
-          
           if (resData.success) {
             currentUsername = savedUser;
             currentPassword = savedPass;
             localStorage.setItem("admin_last_auth_time", Date.now().toString());
             document.getElementById("current-user-display").innerText = currentUsername;
             
-            alert("【同期ステージ1】認証OK。次に店舗マスタを読み込みます。");
             await loadStoreList();
-            
-            alert("【同期ステージ2】店舗マスタOK。次にスタッフマスタを読み込みます。");
             await loadStaffList();
             
-            alert("【同期ステージ3】マスタ読み込みすべてOK。画面を切り替えます！");
             if (overlay) overlay.style.display = "none";
             if (mainApp) mainApp.style.display = "block";
             
@@ -170,7 +160,6 @@
             clearAuthStorage();
           }
         } catch (e) {
-          alert("【認証チェック・致命的エラー】通信または解析でコケました:\n" + e.message);
           if (overlay) overlay.innerText = "通信エラーが発生しました。リロードしてください。";
           showLoading(false);
           return;
@@ -191,18 +180,13 @@
 
       showLoading(true);
       try {
-        alert("【手動ログイン1】GASへ送信します。");
         const response = await fetch(GAS_API_URL, {
           method: "POST",
           body: JSON.stringify({ action: "checkAuth", username: user, password: pass, appVersion: APP_VERSION })
         });
         const resData = await response.json();
         showLoading(false);
-
-        alert("【手動ログイン2】返答受信: " + JSON.stringify(resData));
-
         if(resData.success) {
-          alert("【手動ログイン3】認証成功！認証情報を記憶させて画面をリロードします。");
           localStorage.setItem("admin_saved_username", user);
           localStorage.setItem("admin_saved_password", pass);
           localStorage.setItem("admin_last_auth_time", Date.now().toString());
@@ -375,11 +359,6 @@
         });
   
         showLoading(false);
-        if (res.success) {
-          alert(`サーバーからのメッセージ:\n${res.message}\n\nデータの取得が完了しました。`);
-        } else {
-          alert("データ取得エラー: " + (res.error || "失敗しました"));
-        }
       } catch (e) {
         showLoading(false);
         console.error(e);
