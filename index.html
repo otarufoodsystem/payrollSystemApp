@@ -86,8 +86,10 @@
         </div>
       </div>
 
-      <div class="card p-4 text-center text-muted">
-        勤怠データを取得すると、ここに給与計算対象の一覧が表示されます。
+      <div id="salary-result-area" class="card p-4">
+        <div class="text-center text-muted">
+          勤怠データを取得すると、ここに給与計算対象の一覧が表示されます。
+        </div>
       </div>
     </div>
   </div>
@@ -97,7 +99,7 @@
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzBj09TAQhMHO21Gg8M7lYZCnO7Ot_COC5gIzsvLUB3N5One7jMVvlxN299TgpqzENM/exec"; // 👈 最新のGASウェブアプリURL
-    const APP_VERSION = "1.1.5";
+    const APP_VERSION = "1.1.6";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -359,6 +361,71 @@
         });
   
         showLoading(false);
+        
+        if (res.success) {
+          // 💡 取得完了後、結果エリアをテーブル形式に動的書き換え
+          const resultArea = document.getElementById("salary-result-area");
+          if (resultArea) {
+            const now = new Date();
+            const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+            
+            // 対象スタッフのリストを生成（ALLの場合は複数、個人の場合は1人）
+            let staffRows = "";
+            
+            if (name === "ALL") {
+              // 店舗全員が対象の場合（グローバル配列から所属スタッフを抽出）
+              globalStaffList.forEach(staff => {
+                if (!staff.stores) return;
+                const belongStores = staff.stores.split(',').map(s => s.trim());
+                if (belongStores.includes(store)) {
+                  staffRows += `
+                    <tr>
+                      <td class="font-weight-bold">${staff.name}</td>
+                      <td>${month}月度</td>
+                      <td><span class="badge badge-success">同期完了</span></td>
+                      <td>${timeStr}</td>
+                    </tr>`;
+                }
+              });
+            } else {
+              // 特定の個人のみの場合
+              staffRows += `
+                <tr>
+                  <td class="font-weight-bold">${name}</td>
+                  <td>${month}月度</td>
+                  <td><span class="badge badge-success">同期完了</span></td>
+                  <td>${timeStr}</td>
+                </tr>`;
+            }
+
+            // テーブル全体のHTMLを組み立て
+            resultArea.innerHTML = `
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="font-weight-bold m-0 text-primary">📊 勤怠データ同期結果（${store}）</h6>
+                <small class="text-muted">最終更新: ${timeStr}</small>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-bordered table-hover m-0 bg-white" style="font-size: 0.9rem;">
+                  <thead class="thead-light">
+                    <tr>
+                      <th>スタッフ名</th>
+                      <th>対象月度</th>
+                      <th>ステータス</th>
+                      <th>処理時刻</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${staffRows ? staffRows : '<tr><td colspan="4" class="text-center text-muted">該当スタッフの処理データがありません。</td></tr>'}
+                  </tbody>
+                </table>
+              </div>
+            `;
+          }
+          
+          alert(`サーバーからのメッセージ:\n${res.message}\n\nデータの取得が完了しました。`);
+        } else {
+          alert("データ取得エラー: " + (res.error || "失敗しました"));
+        }
       } catch (e) {
         showLoading(false);
         console.error(e);
