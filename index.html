@@ -328,12 +328,10 @@
       const resultArea = document.getElementById("salary-result-area");
       const monthSelect = document.getElementById("salary-month");
       
-      // 💡 安全対策：ログイン画面表示時など、まだUI要素が揃っていない場合は処理をスキップする
+      // 💡 ログイン前などで、まだ画面のパーツ（要素）が揃っていない場合は何もしない
       if (!storeSelect || !nameSelect) return;
       
       const selectedStore = storeSelect.value;
-      
-      // 💡 安全対策：monthSelectが存在する場合のみ値を取得する（存在しない場合は空文字）
       const selectedMonth = monthSelect ? monthSelect.value : "";
       
       nameSelect.innerHTML = '<option value="ALL">すべてのスタッフ (店舗全員)</option>';
