@@ -319,7 +319,7 @@
           storeSelect.appendChild(opt);
         }
       });
-      storeSelect.onchange = ;
+      storeSelect.onchange = updateSalaryNameSelect;
     }
   
     function updateSalaryNameSelect() {
@@ -328,7 +328,6 @@
       const resultArea = document.getElementById("salary-result-area");
       const monthSelect = document.getElementById("salary-month");
       
-      // 💡 ログイン前などで、まだ画面のパーツ（要素）が揃っていない場合は何もしない
       if (!storeSelect || !nameSelect) return;
       
       const selectedStore = storeSelect.value;
