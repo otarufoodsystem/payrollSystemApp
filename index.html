@@ -327,6 +327,7 @@
       const nameSelect = document.getElementById("salary-name");
       const resultArea = document.getElementById("salary-result-area");
       const monthSelect = document.getElementById("salary-month");
+      const fetchBtn = document.querySelector("button[onclick='fetchAttendanceForSalary()']");
       
       if (!storeSelect || !nameSelect) return;
       
@@ -342,14 +343,26 @@
         return;
       }
 
-      // 💡 読込中であることがわかるよう、一時的にローディング表示にする
+      // 🔒 1. 処理中のため、各フォーム部品と取得ボタンを操作不可（無効化）にする
+      storeSelect.disabled = true;
+      if (monthSelect) monthSelect.disabled = true;
+      nameSelect.disabled = true;
+      if (fetchBtn) fetchBtn.disabled = true;
+
+      // 🔄 2. リスト表示エリアを「処理中」のスタイルに変更してロック
       if (resultArea) {
-        resultArea.innerHTML = '<div class="text-center text-muted">🔄 スプレッドシートから現在の同期状況を確認中...</div>';
+        resultArea.innerHTML = `
+          <div class="text-center p-5 text-primary">
+            <div class="spinner-border text-primary mb-3" role="status"></div>
+            <div class="font-weight-bold">🔄 現在の同期状況を確認中（処理中...）</div>
+            <small class="text-muted">スプレッドシートから最新の情報を読み込んでいます。しばらくお待ちください。</small>
+          </div>
+        `;
       }
 
       let existingStaffs = [];
       try {
-        // 💡 GASを呼び出して、既に「給与一覧」に名前がある人のリストをリアルタイム取得
+        // GASを呼び出してリアルタイムにリストデータを取得
         const res = await callGas("checkSalaryStatus", { month: selectedMonth, store: selectedStore });
         if (res && res.success) {
           existingStaffs = res.existingStaffs || [];
@@ -358,8 +371,8 @@
         console.error("ステータス確認エラー:", e);
       }
 
+      // 👥 スタッフ一覧の組み立て
       let staffRows = "";
-      // 💡 店舗に所属するメンバーを抽出し、選択肢に追加＆画面下部の一覧に表示
       globalStaffList.forEach(staff => {
         if (!staff.stores) return;
         const belongStores = staff.stores.split(',').map(s => s.trim());
@@ -370,7 +383,7 @@
           opt.innerText = staff.name;
           nameSelect.appendChild(opt);
 
-          // 💡 スプレッドシート側に名前があれば「取得済」、なければ「未取得」に分岐
+          // ステータスバッジの判定
           const isDownloaded = existingStaffs.includes(staff.name);
           const badgeClass = isDownloaded ? "badge badge-success status-badge" : "badge badge-secondary status-badge";
           const badgeText = isDownloaded ? "取得済" : "未取得";
@@ -384,7 +397,13 @@
         }
       });
 
-      // 下部エリアの表示を最新情報で書き換え
+      // 🔓 3. リストの描画と同時に、フォーム部品のロックをすべて解除する
+      storeSelect.disabled = false;
+      if (monthSelect) monthSelect.disabled = false;
+      nameSelect.disabled = false;
+      if (fetchBtn) fetchBtn.disabled = false;
+
+      // 下部エリアを表示用の元のテーブル形式に書き換え
       if (resultArea) {
         resultArea.innerHTML = `
           <div class="d-flex justify-content-between align-items-center mb-3">
