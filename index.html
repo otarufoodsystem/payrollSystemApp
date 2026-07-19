@@ -13,7 +13,7 @@
     .tab-btn.active { color: #007bff; border-bottom: 3px solid #007bff; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 1.2rem; color: #007bff; }
+    #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 1.2rem; color: #007bff; text-align: center; }
     #protection-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; z-index: 9990; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; }
   </style>
 </head>
@@ -58,7 +58,7 @@
         <h5 class="font-weight-bold mb-3">勤怠データの呼び出し・給与計算</h5>
         <div class="form-row align-items-end">
           
-          <div class="col-md-3 mb-3">
+          <div class="col-md-2 mb-3">
             <label for="salary-month" class="font-weight-bold">対象月度 <span class="text-danger">*</span></label>
             <select id="salary-month" class="form-control"></select>
           </div>
@@ -77,9 +77,15 @@
             </select>
           </div>
           
-          <div class="col-md-3 mb-3">
-            <button type="button" class="btn btn-primary btn-block font-weight-bold" onclick="fetchAttendanceForSalary()">
+          <div class="col-md-2 mb-3">
+            <button type="button" id="btn-fetch" class="btn btn-primary btn-block font-weight-bold" onclick="fetchAttendanceForSalary()">
               🔄 勤怠データ取得
+            </button>
+          </div>
+
+          <div class="col-md-2 mb-3">
+            <button type="button" id="btn-payslip" class="btn btn-success btn-block font-weight-bold" onclick="generateStaffPayslips()">
+              📄 給与明細作成
             </button>
           </div>
           
@@ -98,8 +104,8 @@
     // ------------------------------------------------------------
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzlefoHGaOg-sjt9u60bUNVvi-r6hlWh3T-724ts-8JC8Uj86Di8BnYCInJzE4Ly3Ow/exec"; // 👈 最新のGASウェブアプリURL
-    const APP_VERSION = "1.1.35";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwlTJ2tc4kT4HBSqsWZw1wdmeOSzpj3_qF12bCPHno3OhSnltf4cz4rH2tJB7oGN1ht/exec";
+    const APP_VERSION = "1.1.37";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -193,8 +199,6 @@
           localStorage.setItem("admin_saved_password", pass);
           localStorage.setItem("admin_last_auth_time", Date.now().toString());
           document.getElementById("login-err-msg").style.display = "none";
-          
-          // 💡 確実に状態をリセットして再起動させるため、ページを強制リロードします
           location.reload();
         } else {
           alert("【手動ログイン失敗】理由: " + (resData.error || "ユーザー名またはパスワードが違います。"));
@@ -227,6 +231,10 @@
       localStorage.removeItem("admin_saved_password");
       localStorage.removeItem("admin_last_auth_time");
     }
+
+    document.body.addEventListener("input", handleUserActivity);
+    document.body.addEventListener("click", handleUserActivity);
+    document.body.addEventListener("keypress", handleUserActivity);
 
     function handleUserActivity() {
       if (currentUsername && currentPassword) {
@@ -327,7 +335,8 @@
       const nameSelect = document.getElementById("salary-name");
       const resultArea = document.getElementById("salary-result-area");
       const monthSelect = document.getElementById("salary-month");
-      const fetchBtn = document.querySelector("button[onclick='fetchAttendanceForSalary()']");
+      const fetchBtn = document.getElementById("btn-fetch");
+      const payslipBtn = document.getElementById("btn-payslip");
       
       if (!storeSelect || !nameSelect) return;
       
@@ -343,13 +352,12 @@
         return;
       }
 
-      // 🔒 1. 処理中のため、各フォーム部品と取得ボタンを操作不可（無効化）にする
       storeSelect.disabled = true;
       if (monthSelect) monthSelect.disabled = true;
       nameSelect.disabled = true;
       if (fetchBtn) fetchBtn.disabled = true;
+      if (payslipBtn) payslipBtn.disabled = true;
 
-      // 🔄 2. リスト表示エリアを「処理中」のスタイルに変更してロック
       if (resultArea) {
         resultArea.innerHTML = `
           <div class="text-center p-5 text-primary">
@@ -362,7 +370,6 @@
 
       let existingStaffs = [];
       try {
-        // GASを呼び出してリアルタイムにリストデータを取得
         const res = await callGas("checkSalaryStatus", { month: selectedMonth, store: selectedStore });
         if (res && res.success) {
           existingStaffs = res.existingStaffs || [];
@@ -371,19 +378,16 @@
         console.error("ステータス確認エラー:", e);
       }
 
-      // 👥 スタッフ一覧の組み立て
       let staffRows = "";
       globalStaffList.forEach(staff => {
         if (!staff.stores) return;
         const belongStores = staff.stores.split(',').map(s => s.trim());
         if (belongStores.includes(selectedStore)) {
-          // 個人名セレクトボックスへの追加
           const opt = document.createElement("option");
           opt.value = staff.name;
           opt.innerText = staff.name;
           nameSelect.appendChild(opt);
 
-          // ステータスバッジの判定
           const isDownloaded = existingStaffs.includes(staff.name);
           const badgeClass = isDownloaded ? "badge badge-success status-badge" : "badge badge-secondary status-badge";
           const badgeText = isDownloaded ? "取得済" : "未取得";
@@ -397,13 +401,12 @@
         }
       });
 
-      // 🔓 3. リストの描画と同時に、フォーム部品のロックをすべて解除する
       storeSelect.disabled = false;
       if (monthSelect) monthSelect.disabled = false;
       nameSelect.disabled = false;
       if (fetchBtn) fetchBtn.disabled = false;
+      if (payslipBtn) payslipBtn.disabled = false;
 
-      // 下部エリアを表示用の元のテーブル形式に書き換え
       if (resultArea) {
         resultArea.innerHTML = `
           <div class="d-flex justify-content-between align-items-center mb-3">
@@ -436,10 +439,8 @@
       if (!month) { alert("対象月度を選択してください。"); return; }
       if (!store) { alert("店舗名を選択してください。"); return; }
   
-      // 👥 処理対象のスタッフを決定する
       let targets = [];
       if (name === "ALL") {
-        // 店舗に所属するスタッフをグローバルリストから全抽出
         globalStaffList.forEach(staff => {
           if (!staff.stores) return;
           const belongStores = staff.stores.split(',').map(s => s.trim());
@@ -448,7 +449,6 @@
           }
         });
       } else {
-        // 特定の個人が選択されている場合
         targets.push(name);
       }
 
@@ -457,23 +457,18 @@
         return;
       }
 
-      const totalCount = targets.length; // 全件数
-      let successCount = 0;             // 完了件数
-      let errorMessages = [];           // エラーを蓄積する配列
+      const totalCount = targets.length;
+      let successCount = 0;
+      let errorMessages = [];
 
-      // 🔄 1. 処理開始時の画面ロックと初期表示
       showLoading(true);
-      updateProgressMessage(successCount, totalCount);
+      updateProgressMessage(successCount, totalCount, "勤怠同期");
 
-      // 🚀 1人ずつ順番にGASを呼び出して処理（進捗を画面に反映させるため）
       for (let i = 0; i < targets.length; i++) {
         const staffName = targets[i];
-        
-        // 🔄 2. ループ毎に進捗表示を更新 (例: 1 / 5 件完了)
-        updateProgressMessage(successCount, totalCount, staffName);
+        updateProgressMessage(successCount, totalCount, "勤怠同期", staffName);
 
         try {
-          // 💡 GAS側の「name」引数に1人ずつの名前を渡して個別に実行
           const res = await callGas("getAttendanceDataForSalary", {
             salarySpreadsheetId: SALARY_SPREADSHEET_ID,
             month: month,
@@ -483,7 +478,6 @@
     
           if (res && res.success) {
             successCount++;
-            // 💡 リアルタイムに画面下のリスト（テーブル）のバッジを「取得済」に書き換える
             const row = document.getElementById(`row-${store}-${staffName}`);
             if (row) {
               const badge = row.querySelector('.status-badge');
@@ -500,10 +494,8 @@
         }
       }
 
-      // 🔓 3. すべての処理が終了したらローディング表示を消す
       showLoading(false);
 
-      // 🔔 4. 結果をユーザーに通知
       if (errorMessages.length === 0) {
         alert(`同期処理がすべて完了しました！\n（成功: ${successCount} 件 / 全: ${totalCount} 件）`);
       } else {
@@ -511,21 +503,85 @@
       }
     }
 
-    // 📝 進捗メッセージを表示中のローディング画面に書き込む補助関数
-    function updateProgressMessage(current, total, activeName = "") {
+    // 📄 給与明細作成処理用ループ関数
+    async function generateStaffPayslips() {
+      const month = document.getElementById("salary-month").value;
+      const store = document.getElementById("salary-store").value;
+      const name = document.getElementById("salary-name").value;
+
+      if (!month) { alert("対象月度を選択してください。"); return; }
+      if (!store) { alert("店舗名を選択してください。"); return; }
+
+      let targets = [];
+      if (name === "ALL") {
+        globalStaffList.forEach(staff => {
+          if (!staff.stores) return;
+          const belongStores = staff.stores.split(',').map(s => s.trim());
+          if (belongStores.includes(store)) {
+            targets.push(staff.name);
+          }
+        });
+      } else {
+        targets.push(name);
+      }
+
+      if (targets.length === 0) {
+        alert("処理対象のスタッフが見つかりません。");
+        return;
+      }
+
+      if (!confirm(`選択された月度・店舗のスタッフ（全 ${targets.length} 件）の給与明細シートの生成を開始します。よろしいですか？\n※事前に「勤怠データ取得」を完了させておいてください。`)) {
+        return;
+      }
+
+      const totalCount = targets.length;
+      let successCount = 0;
+      let errorMessages = [];
+
+      showLoading(true);
+      updateProgressMessage(successCount, totalCount, "明細作成");
+
+      for (let i = 0; i < targets.length; i++) {
+        const staffName = targets[i];
+        updateProgressMessage(successCount, totalCount, "明細作成", staffName);
+
+        try {
+          const res = await callGas("createStaffPayslip", {
+            month: month,
+            store: store,
+            name: staffName
+          });
+
+          if (res && res.success) {
+            successCount++;
+          } else {
+            errorMessages.push(`【${staffName}】 ${res.error || "失敗しました"}`);
+          }
+        } catch (e) {
+          errorMessages.push(`【${staffName}】 通信エラーが発生しました`);
+        }
+      }
+
+      showLoading(false);
+
+      if (errorMessages.length === 0) {
+        alert(`給与明細の作成処理がすべて完了しました！\n（成功: ${successCount} 件 / 全: ${totalCount} 件）`);
+      } else {
+        alert(`一部の明細作成でエラーが発生しました。\n\n成功: ${successCount} 件 / 失敗: ${errorMessages.length} 件\n\n▼エラー詳細:\n${errorMessages.join("\n")}`);
+      }
+    }
+
+    function updateProgressMessage(current, total, taskType = "処理", activeName = "") {
       const loadingEl = document.getElementById('loading');
       if (!loadingEl) return;
       
-      let msg = `🔄 処理中... (${current} / ${total} 件完了)`;
+      let msg = `🔄 ${taskType}中... (${current} / ${total} 件完了)`;
       if (activeName) {
-        msg += `<br><span style="font-size: 0.9rem; color: #555; font-weight: normal;">現在: ${activeName} さんのデータを同期中...</span>`;
+        msg += `<br><span style="font-size: 0.9rem; color: #555; font-weight: normal;">現在: ${activeName} さんの明細を出力中...</span>`;
       }
       loadingEl.innerHTML = msg;
     }
     
-    // ------------------------------------------------------------
-    // 📦 初期同期用マスタ読み込み関数
-    // ------------------------------------------------------------
     async function loadStaffList() {
       try {
         const res = await callGas("getStaffList");
