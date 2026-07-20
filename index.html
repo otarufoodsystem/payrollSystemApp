@@ -58,7 +58,7 @@
         <h5 class="font-weight-bold mb-3">勤怠データの呼び出し・給与計算</h5>
         <div class="form-row align-items-end">
           
-          <div class="col-md-3 mb-3">
+          <div class="col-md-2 mb-3">
             <label for="salary-month" class="font-weight-bold">対象月度 <span class="text-danger">*</span></label>
             <select id="salary-month" class="form-control"></select>
           </div>
@@ -70,7 +70,7 @@
             </select>
           </div>
           
-          <div class="col-md-2 mb-3">
+          <div class="col-md-3 mb-3">
             <label for="salary-name" class="font-weight-bold">個人名（任意）</label>
             <select id="salary-name" class="form-control">
               <option value="ALL">すべてのスタッフ (店舗全員)</option>
@@ -78,13 +78,13 @@
           </div>
           
           <div class="col-md-2 mb-3">
-            <button type="button" id="btn-fetch-attendance" class="btn btn-primary btn-block font-weight-bold" onclick="fetchAttendanceForSalary()">
+            <button type="button" id="btn-fetch" class="btn btn-primary btn-block font-weight-bold" onclick="fetchAttendanceForSalary()">
               🔄 勤怠データ取得
             </button>
           </div>
 
           <div class="col-md-2 mb-3">
-            <button type="button" id="btn-create-payslip" class="btn btn-success btn-block font-weight-bold" onclick="createPayslips()">
+            <button type="button" id="btn-payslip" class="btn btn-success btn-block font-weight-bold" onclick="generateStaffPayslips()">
               📄 給与明細作成
             </button>
           </div>
@@ -104,8 +104,8 @@
     // ------------------------------------------------------------
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyuGZKL6xxRfIpJtUtfZqrV3K25IPL7QD-FcaIoZIChHIykQ3cgQOkApUDrC0MtR2F9/exec"; 
-    const APP_VERSION = "1.2.1"; // 明細作成機能追加に伴いバージョンアップ
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzlefoHGaOg-sjt9u60bUNVvi-r6hlWh3T-724ts-8JC8Uj86Di8BnYCInJzE4Ly3Ow/exec";
+    const APP_VERSION = "1.1.37";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -114,7 +114,6 @@
     let timeoutTimer = null;
     let globalStaffList = [];
     let globalStoreList = [];
-    let currentStoreStatusMap = {}; // 画面上のスタッフのステータスを追跡するマップ
 
     const lastAuthTime = localStorage.getItem("admin_last_auth_time") || "0";
     window.addEventListener("DOMContentLoaded", runAuthentication);
@@ -175,7 +174,6 @@
         }
       }
   
-      alert("【ログイン待ち】認証情報がないため、ログイン画面を表示します。");
       if (overlay) overlay.style.display = "none";
       if (loginScreen) loginScreen.style.display = "flex";
       if (mainApp) mainApp.style.display = "none";
@@ -249,14 +247,14 @@
     }
 
     // ------------------------------------------------------------
-    // ⚙️ GAS共通呼び出しラッパー
+    // ⚙️ GAS共通呼び出しラッパー (修正版)
     // ------------------------------------------------------------
     async function callGas(action, data = null) {
       const savedUser = localStorage.getItem("admin_saved_username") || "";
       const savedPass = localStorage.getItem("admin_saved_password") || "";
       const payload = { action: action, username: savedUser, password: savedPass };
       if (data !== null) payload.data = data;
-    
+  
       try {
         const response = await fetch(GAS_API_URL, { method: "POST", body: JSON.stringify(payload) });
         const resData = await response.json();
@@ -337,8 +335,8 @@
       const nameSelect = document.getElementById("salary-name");
       const resultArea = document.getElementById("salary-result-area");
       const monthSelect = document.getElementById("salary-month");
-      const fetchBtn = document.getElementById("btn-fetch-attendance");
-      const slipBtn = document.getElementById("btn-create-payslip");
+      const fetchBtn = document.getElementById("btn-fetch");
+      const payslipBtn = document.getElementById("btn-payslip");
       
       if (!storeSelect || !nameSelect) return;
       
@@ -346,7 +344,6 @@
       const selectedMonth = monthSelect ? monthSelect.value : "";
       
       nameSelect.innerHTML = '<option value="ALL">すべてのスタッフ (店舗全員)</option>';
-      currentStoreStatusMap = {}; // ステータスマップを初期化
       
       if (!selectedStore) {
         if (resultArea) {
@@ -355,14 +352,12 @@
         return;
       }
 
-      // 🔒 1. 各ボタンやフォームの無効化
       storeSelect.disabled = true;
       if (monthSelect) monthSelect.disabled = true;
       nameSelect.disabled = true;
       if (fetchBtn) fetchBtn.disabled = true;
-      if (slipBtn) slipBtn.disabled = true;
+      if (payslipBtn) payslipBtn.disabled = true;
 
-      // 🔄 2. ローディング表示
       if (resultArea) {
         resultArea.innerHTML = `
           <div class="text-center p-5 text-primary">
@@ -374,18 +369,15 @@
       }
 
       let existingStaffs = [];
-      let payslipDoneStaffs = []; // 明細作成済みの社員一覧
       try {
         const res = await callGas("checkSalaryStatus", { month: selectedMonth, store: selectedStore });
         if (res && res.success) {
           existingStaffs = res.existingStaffs || [];
-          payslipDoneStaffs = res.payslipDoneStaffs || []; // GAS側から明細作成済みのリストも返してもらう想定
         }
       } catch (e) {
         console.error("ステータス確認エラー:", e);
       }
 
-      // 👥 スタッフ一覧の組み立て
       let staffRows = "";
       globalStaffList.forEach(staff => {
         if (!staff.stores) return;
@@ -396,38 +388,25 @@
           opt.innerText = staff.name;
           nameSelect.appendChild(opt);
 
-          // ステータスの決定
-          let statusText = "未取得";
-          let badgeClass = "badge badge-secondary status-badge";
-          
-          if (payslipDoneStaffs.includes(staff.name)) {
-            statusText = "明細作成済";
-            badgeClass = "badge badge-info status-badge";
-          } else if (existingStaffs.includes(staff.name)) {
-            statusText = "取得済";
-            badgeClass = "badge badge-success status-badge";
-          }
-          
-          // 内部マップに状態を保持
-          currentStoreStatusMap[staff.name] = statusText;
+          const isDownloaded = existingStaffs.includes(staff.name);
+          const badgeClass = isDownloaded ? "badge badge-success status-badge" : "badge badge-secondary status-badge";
+          const badgeText = isDownloaded ? "取得済" : "未取得";
 
           staffRows += `
             <tr id="row-${selectedStore}-${staff.name}">
               <td>${selectedMonth}月度</td>
               <td class="font-weight-bold">${staff.name}</td>
-              <td><span class="${badgeClass}">${statusText}</span></td>
+              <td><span class="${badgeClass}">${badgeText}</span></td>
             </tr>`;
         }
       });
 
-      // 🔓 3. ロック解除
       storeSelect.disabled = false;
       if (monthSelect) monthSelect.disabled = false;
       nameSelect.disabled = false;
       if (fetchBtn) fetchBtn.disabled = false;
-      if (slipBtn) slipBtn.disabled = false;
+      if (payslipBtn) payslipBtn.disabled = false;
 
-      // テーブルの描画
       if (resultArea) {
         resultArea.innerHTML = `
           <div class="d-flex justify-content-between align-items-center mb-3">
@@ -478,16 +457,16 @@
         return;
       }
 
-      const totalCount = targets.length; 
-      let successCount = 0;             
-      let errorMessages = [];           
+      const totalCount = targets.length;
+      let successCount = 0;
+      let errorMessages = [];
 
       showLoading(true);
-      updateProgressMessage(successCount, totalCount, "", "勤怠取得中");
+      updateProgressMessage(successCount, totalCount, "勤怠同期");
 
       for (let i = 0; i < targets.length; i++) {
         const staffName = targets[i];
-        updateProgressMessage(successCount, totalCount, staffName, "勤怠取得中");
+        updateProgressMessage(successCount, totalCount, "勤怠同期", staffName);
 
         try {
           const res = await callGas("getAttendanceDataForSalary", {
@@ -499,7 +478,6 @@
     
           if (res && res.success) {
             successCount++;
-            currentStoreStatusMap[staffName] = "取得済"; // 状態更新
             const row = document.getElementById(`row-${store}-${staffName}`);
             if (row) {
               const badge = row.querySelector('.status-badge');
@@ -525,10 +503,7 @@
       }
     }
 
-    // ------------------------------------------------------------
-    // 📄 給与明細作成ロジック（追加）
-    // ------------------------------------------------------------
-    async function createPayslips() {
+    async function generateStaffPayslips() {
       const month = document.getElementById("salary-month").value;
       const store = document.getElementById("salary-store").value;
       const name = document.getElementById("salary-name").value;
@@ -536,34 +511,25 @@
       if (!month) { alert("対象月度を選択してください。"); return; }
       if (!store) { alert("店舗名を選択してください。"); return; }
 
-      // 👥 1. 明細作成の対象スタッフを選定（画面上で「取得済」の社員のみ）
       let targets = [];
       if (name === "ALL") {
         globalStaffList.forEach(staff => {
           if (!staff.stores) return;
           const belongStores = staff.stores.split(',').map(s => s.trim());
           if (belongStores.includes(store)) {
-            // ステータスが「取得済」のものだけをプッシュ
-            if (currentStoreStatusMap[staff.name] === "取得済") {
-              targets.push(staff.name);
-            }
+            targets.push(staff.name);
           }
         });
       } else {
-        if (currentStoreStatusMap[name] === "取得済") {
-          targets.push(name);
-        } else {
-          alert(`選択されたスタッフ（${name}）は勤怠データが「取得済」ではないため、明細を作成できません。先に対象の勤怠データを取得してください。`);
-          return;
-        }
+        targets.push(name);
       }
 
       if (targets.length === 0) {
-        alert("現在「取得済」ステータスのスタッフがいません。\n先に「勤怠データ取得」を実行してください。");
+        alert("処理対象のスタッフが見つかりません。");
         return;
       }
 
-      if (!confirm(`勤怠データ「取得済」のスタッフ ${targets.length} 名を対象に、給与明細書の自動生成を開始します。よろしいですか？`)) {
+      if (!confirm(`選択された月度・店舗のスタッフ（全 ${targets.length} 件）の給与明細シートの生成を開始します。よろしいですか？\n※事前に「勤怠データ取得」を完了させておいてください。`)) {
         return;
       }
 
@@ -572,17 +538,14 @@
       let errorMessages = [];
 
       showLoading(true);
-      updateProgressMessage(successCount, totalCount, "", "明細作成中");
+      updateProgressMessage(successCount, totalCount, "明細作成");
 
-      // 🚀 1人ずつ順番にGASを呼び出して明細シートを作成
       for (let i = 0; i < targets.length; i++) {
         const staffName = targets[i];
-        updateProgressMessage(successCount, totalCount, staffName, "明細作成中");
+        updateProgressMessage(successCount, totalCount, "明細作成", staffName);
 
         try {
-          // GAS側の「createStaffPayslip」アクションを呼び出し
           const res = await callGas("createStaffPayslip", {
-            salarySpreadsheetId: SALARY_SPREADSHEET_ID,
             month: month,
             store: store,
             name: staffName
@@ -590,50 +553,34 @@
 
           if (res && res.success) {
             successCount++;
-            currentStoreStatusMap[staffName] = "明細作成済"; // フロントのステータス書き換え
-            
-            // 💡 リアルタイムに画面テーブルのバッジを「明細作成済」に変更
-            const row = document.getElementById(`row-${store}-${staffName}`);
-            if (row) {
-              const badge = row.querySelector('.status-badge');
-              if (badge) {
-                badge.className = "badge badge-info status-badge";
-                badge.innerText = "明細作成済";
-              }
-            }
           } else {
-            errorMessages.push(`【${staffName}】 ${res.error || "作成に失敗しました"}`);
+            errorMessages.push(`【${staffName}】 ${res.error || "失敗しました"}`);
           }
         } catch (e) {
-          errorMessages.push(`【${staffName}】 通信エラーまたは処理エラーが発生しました`);
+          errorMessages.push(`【${staffName}】 通信エラーが発生しました`);
         }
       }
 
       showLoading(false);
 
       if (errorMessages.length === 0) {
-        alert(`給与明細書の作成がすべて完了しました！\n（成功: ${successCount} 件 / 対象: ${totalCount} 件）`);
+        alert(`給与明細の作成処理がすべて完了しました！\n（成功: ${successCount} 件 / 全: ${totalCount} 件）`);
       } else {
         alert(`一部の明細作成でエラーが発生しました。\n\n成功: ${successCount} 件 / 失敗: ${errorMessages.length} 件\n\n▼エラー詳細:\n${errorMessages.join("\n")}`);
       }
     }
 
-    // 📝 進捗メッセージの補助関数（処理モードを引数に追加）
-    function updateProgressMessage(current, total, activeName = "", mode = "処理中") {
+    function updateProgressMessage(current, total, taskType = "処理", activeName = "") {
       const loadingEl = document.getElementById('loading');
       if (!loadingEl) return;
       
-      let modeIcon = mode === "明細作成中" ? "📄" : "🔄";
-      let msg = `${modeIcon} ${mode}... (${current} / ${total} 件完了)`;
+      let msg = `🔄 ${taskType}中... (${current} / ${total} 件完了)`;
       if (activeName) {
-        msg += `<br><span style="font-size: 0.9rem; color: #555; font-weight: normal;">現在: ${activeName} さんの処理を実行中...</span>`;
+        msg += `<br><span style="font-size: 0.9rem; color: #555; font-weight: normal;">現在: ${activeName} さんの明細を出力中...</span>`;
       }
       loadingEl.innerHTML = msg;
     }
     
-    // ------------------------------------------------------------
-    // 📦 初期同期用マスタ読み込み関数
-    // ------------------------------------------------------------
     async function loadStaffList() {
       try {
         const res = await callGas("getStaffList");
