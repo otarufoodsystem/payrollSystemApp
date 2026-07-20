@@ -256,17 +256,22 @@
       const savedPass = localStorage.getItem("admin_saved_password") || "";
       const payload = { action: action, username: savedUser, password: savedPass };
       if (data !== null) payload.data = data;
-  
+    
       try {
         const response = await fetch(GAS_API_URL, { method: "POST", body: JSON.stringify(payload) });
         const resData = await response.json();
+        
         if (resData.authError) {
           clearAuthStorage();
           alert("セッションの有効期限が切れました。再ログインしてください。");
           location.reload();
           throw new Error("Auth Error");
         }
-        if (!resData.success) throw new Error(resData.error);
+        
+        if (!resData.success) {
+          throw new Error(resData.error || "処理に失敗しました");
+        }
+        
         localStorage.setItem("admin_last_auth_time", Date.now().toString());
         return resData;
       } catch (error) {
