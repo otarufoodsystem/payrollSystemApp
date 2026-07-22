@@ -104,8 +104,8 @@
     // ------------------------------------------------------------
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzgrOh7Dl5iZLiYqQc8HMcM-y83pvSLW8fcxFB7_cSyIMv_JquCR0DDlGjecCK8L_0/exec";
-    const APP_VERSION = "1.2.18";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxTQI_yII-JKCLF-8UjjJHlKtPsiED_nCiGpXpbNX-_j0iQ0VteJ0rpngka-AMAG6k/exec";
+    const APP_VERSION = "1.2.19";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -118,7 +118,7 @@
     const lastAuthTime = localStorage.getItem("admin_last_auth_time") || "0";
     window.addEventListener("DOMContentLoaded", runAuthentication);
 
-    // ------------------------------------------------------------
+// ------------------------------------------------------------
     // 🔒 認証・セキュリティ周り
     // ------------------------------------------------------------
     async function runAuthentication() {
@@ -388,15 +388,27 @@
           opt.innerText = staff.name;
           nameSelect.appendChild(opt);
 
-          const isDownloaded = existingStaffs.includes(staff.name);
-          const badgeClass = isDownloaded ? "badge badge-success status-badge" : "badge badge-secondary status-badge";
-          const badgeText = isDownloaded ? "取得済" : "未取得";
+          // ★ ステータス・最終更新日時の取得と判定
+          const staffStatusObj = existingStaffs.find(s => s.name === staff.name);
+          const currentStatus = staffStatusObj ? staffStatusObj.status : "勤怠データ未取得";
+          const updatedAtStr = (staffStatusObj && staffStatusObj.updatedAt) ? staffStatusObj.updatedAt : "-";
+
+          let badgeClass = "badge badge-secondary status-badge";
+          if (currentStatus === "給与明細作成済") {
+            badgeClass = "badge badge-primary status-badge";
+          } else if (currentStatus === "勤怠データ取得済") {
+            badgeClass = "badge badge-success status-badge";
+          }
+
+          // IDエスケープ（空白・特殊文字対策）
+          const safeStaffId = encodeURIComponent(staff.name);
 
           staffRows += `
-            <tr id="row-${selectedStore}-${staff.name}">
+            <tr id="row-${selectedStore}-${safeStaffId}">
               <td>${selectedMonth}月度</td>
               <td class="font-weight-bold">${staff.name}</td>
-              <td><span class="${badgeClass}">${badgeText}</span></td>
+              <td><span class="${badgeClass}">${currentStatus}</span></td>
+              <td class="text-muted status-updated-at" style="font-size: 0.85rem;">${updatedAtStr}</td>
             </tr>`;
         }
       });
@@ -420,10 +432,11 @@
                   <th>対象月度</th>
                   <th>スタッフ名</th>
                   <th>ステータス</th>
+                  <th>最終更新日時</th>
                 </tr>
               </thead>
               <tbody>
-                ${staffRows ? staffRows : '<tr><td colspan="3" class="text-center text-muted">この店舗に所属するスタッフが登録されていません。</td></tr>'}
+                ${staffRows ? staffRows : '<tr><td colspan="4" class="text-center text-muted">この店舗に所属するスタッフが登録されていません。</td></tr>'}
               </tbody>
             </table>
           </div>
@@ -478,12 +491,24 @@
     
           if (res && res.success) {
             successCount++;
-            const row = document.getElementById(`row-${store}-${staffName}`);
+            const safeStaffId = encodeURIComponent(staffName);
+            const row = document.getElementById(`row-${store}-${safeStaffId}`);
             if (row) {
               const badge = row.querySelector('.status-badge');
               if (badge) {
                 badge.className = "badge badge-success status-badge";
-                badge.innerText = "取得済";
+                badge.innerText = "勤怠データ取得済";
+              }
+              const updatedAtCell = row.querySelector('.status-updated-at');
+              if (updatedAtCell) {
+                const now = new Date();
+                const nowStr = now.getFullYear() + "/" + 
+                  ("0" + (now.getMonth() + 1)).slice(-2) + "/" + 
+                  ("0" + now.getDate()).slice(-2) + " " + 
+                  ("0" + now.getHours()).slice(-2) + ":" + 
+                  ("0" + now.getMinutes()).slice(-2) + ":" + 
+                  ("0" + now.getSeconds()).slice(-2);
+                updatedAtCell.innerText = nowStr;
               }
             }
           } else {
@@ -553,6 +578,26 @@
 
           if (res && res.success) {
             successCount++;
+            const safeStaffId = encodeURIComponent(staffName);
+            const row = document.getElementById(`row-${store}-${safeStaffId}`);
+            if (row) {
+              const badge = row.querySelector('.status-badge');
+              if (badge) {
+                badge.className = "badge badge-primary status-badge";
+                badge.innerText = "給与明細作成済";
+              }
+              const updatedAtCell = row.querySelector('.status-updated-at');
+              if (updatedAtCell) {
+                const now = new Date();
+                const nowStr = now.getFullYear() + "/" + 
+                  ("0" + (now.getMonth() + 1)).slice(-2) + "/" + 
+                  ("0" + now.getDate()).slice(-2) + " " + 
+                  ("0" + now.getHours()).slice(-2) + ":" + 
+                  ("0" + now.getMinutes()).slice(-2) + ":" + 
+                  ("0" + now.getSeconds()).slice(-2);
+                updatedAtCell.innerText = nowStr;
+              }
+            }
           } else {
             errorMessages.push(`【${staffName}】 ${res.error || "失敗しました"}`);
           }
