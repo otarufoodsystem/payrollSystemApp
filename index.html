@@ -104,8 +104,8 @@
     // ------------------------------------------------------------
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxnIWtcqlX9Y0JPvGUVggKwDbsFvNj2Yr7wNP13q-6GuVbttcRFxMKbNu29MXXh-m92/exec";
-    const APP_VERSION = "1.2.58";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx9lEtUhPk1Zf6Yc2uK_m9LO9wFKoZjTmYEKiFwi3HcGpL3zqCouzRl2joJ3Qsgp7bK/exec";
+    const APP_VERSION = "1.2.59";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -611,25 +611,31 @@
           });
 
           if (res && res.success) {
-            successCount++;
-            const safeStaffId = encodeURIComponent(staffName);
-            const row = document.getElementById(`row-${store}-${safeStaffId}`);
-            if (row) {
-              const badge = row.querySelector('.status-badge');
-              if (badge) {
-                badge.className = "badge badge-primary status-badge";
-                badge.innerText = "給与明細作成済";
-              }
-              const updatedAtCell = row.querySelector('.status-updated-at');
-              if (updatedAtCell) {
-                const now = new Date();
-                const nowStr = now.getFullYear() + "/" + 
-                  ("0" + (now.getMonth() + 1)).slice(-2) + "/" + 
-                  ("0" + now.getDate()).slice(-2) + " " + 
-                  ("0" + now.getHours()).slice(-2) + ":" + 
-                  ("0" + now.getMinutes()).slice(-2) + ":" + 
-                  ("0" + now.getSeconds()).slice(-2);
-                updatedAtCell.innerText = nowStr;
+            // ★スキップ（未処理）の場合は画面のステータスを変更せず、カウントも分ける
+            if (res.skipped) {
+              console.log(`${staffName} さんはスキップされました: ${res.message || ""}`);
+            } else {
+              // 実際に明細が作成された場合のみ画面のバッジ・最終更新日時を更新
+              successCount++;
+              const safeStaffId = encodeURIComponent(staffName);
+              const row = document.getElementById(`row-${store}-${safeStaffId}`);
+              if (row) {
+                const badge = row.querySelector('.status-badge');
+                if (badge) {
+                  badge.className = "badge badge-primary status-badge";
+                  badge.innerText = "給与明細作成済";
+                }
+                const updatedAtCell = row.querySelector('.status-updated-at');
+                if (updatedAtCell) {
+                  const now = new Date();
+                  const nowStr = now.getFullYear() + "/" + 
+                    ("0" + (now.getMonth() + 1)).slice(-2) + "/" + 
+                    ("0" + now.getDate()).slice(-2) + " " + 
+                    ("0" + now.getHours()).slice(-2) + ":" + 
+                    ("0" + now.getMinutes()).slice(-2) + ":" + 
+                    ("0" + now.getSeconds()).slice(-2);
+                  updatedAtCell.innerText = nowStr;
+                }
               }
             }
           } else {
