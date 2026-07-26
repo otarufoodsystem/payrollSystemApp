@@ -611,13 +611,18 @@
           });
 
           if (res && res.success) {
-            // ★ skipped フラグ または メッセージに "スキップ" が含まれている場合は画面を更新しない
-            const isSkipped = res.skipped || (res.message && res.message.indexOf("スキップ") !== -1);
+            // レスポンスの階層差を吸収（res直下、または res.data 内を参照）
+            const resObj = res.data || res;
+            
+            // skipped フラグ、または message に "スキップ" が含まれているかチェック
+            const isSkipped = resObj.skipped === true || 
+                              (resObj.message && String(resObj.message).indexOf("スキップ") !== -1) ||
+                              (res.message && String(res.message).indexOf("スキップ") !== -1);
 
             if (isSkipped) {
-              console.log(`${staffName} さんは作成対象外のためスキップされました（画面表示を維持）`);
+              console.log(`${staffName} さんはスキップされたため、画面表示を保持します。`);
             } else {
-              // 実際に明細作成が完了した場合のみ画面のステータス・日時を更新
+              // 実際に明細作成された場合のみ画面を「給与明細作成済」に更新
               successCount++;
               const safeStaffId = encodeURIComponent(staffName);
               const row = document.getElementById(`row-${store}-${safeStaffId}`);
