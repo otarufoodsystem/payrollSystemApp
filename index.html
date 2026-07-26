@@ -611,11 +611,13 @@
           });
 
           if (res && res.success) {
-            // ★スキップ（未処理）の場合は画面のステータスを変更せず、カウントも分ける
-            if (res.skipped) {
-              console.log(`${staffName} さんはスキップされました: ${res.message || ""}`);
+            // ★ skipped フラグ または メッセージに "スキップ" が含まれている場合は画面を更新しない
+            const isSkipped = res.skipped || (res.message && res.message.indexOf("スキップ") !== -1);
+
+            if (isSkipped) {
+              console.log(`${staffName} さんは作成対象外のためスキップされました（画面表示を維持）`);
             } else {
-              // 実際に明細が作成された場合のみ画面のバッジ・最終更新日時を更新
+              // 実際に明細作成が完了した場合のみ画面のステータス・日時を更新
               successCount++;
               const safeStaffId = encodeURIComponent(staffName);
               const row = document.getElementById(`row-${store}-${safeStaffId}`);
