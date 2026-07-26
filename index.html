@@ -104,8 +104,8 @@
     // ------------------------------------------------------------
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyRWLkiz-dXUhT6zjPtL42UKDXSLDv2wdfnkV-e9aXU9jucNfTcr5wbI-H7nIQPvCFV/exec";
-    const APP_VERSION = "1.2.54";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwm0WF_yxcnNY-51-Dz7X4ioELzj5TkDO09pPNKvmigfGqnseQALAqVaOs6i_JoipAA/exec";
+    const APP_VERSION = "1.2.56";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -247,6 +247,21 @@
     }
 
     // ------------------------------------------------------------
+    // ⚙️ ステータスバッジの共通判定関数（新設）
+    // ------------------------------------------------------------
+    function getStatusBadgeClass(status) {
+      if (!status) return "badge badge-secondary status-badge";
+      if (status.indexOf("要確認") !== -1) {
+        return "badge badge-warning status-badge"; // 要確認は黄色バッジ
+      } else if (status === "給与明細作成済") {
+        return "badge badge-primary status-badge";
+      } else if (status === "勤怠データ取得済") {
+        return "badge badge-success status-badge";
+      }
+      return "badge badge-secondary status-badge";
+    }
+
+    // ------------------------------------------------------------
     // ⚙️ GAS共通呼び出しラッパー (自動リトライ機能付き)
     // ------------------------------------------------------------
     async function callGas(action, data = null) {
@@ -278,7 +293,7 @@
           localStorage.setItem("admin_last_auth_time", Date.now().toString());
           return resData;
         } catch (error) {
-          if (error.message === "Auth Error") throw error; // 認証エラーは即中断
+          if (error.message === "Auth Error") throw error;
 
           if (attempt < retries) {
             console.warn(`通信失敗 (${attempt}/${retries}回目): ${error.message}。${interval}ms後に再試行します...`);
@@ -404,13 +419,8 @@
           const currentStatus = staffStatusObj ? staffStatusObj.status : "勤怠データ未取得";
           const updatedAtStr = (staffStatusObj && staffStatusObj.updatedAt) ? staffStatusObj.updatedAt : "-";
 
-          let badgeClass = "badge badge-secondary status-badge";
-          if (currentStatus === "給与明細作成済") {
-            badgeClass = "badge badge-primary status-badge";
-          } else if (currentStatus === "勤怠データ取得済") {
-            badgeClass = "badge badge-success status-badge";
-          }
-
+          // ★修正ポイント1: ステータスに応じたバッジクラス判定を適用
+          const badgeClass = getStatusBadgeClass(currentStatus);
           const safeStaffId = encodeURIComponent(staff.name);
 
           staffRows += `
@@ -505,10 +515,21 @@
             const row = document.getElementById(`row-${store}-${safeStaffId}`);
             if (row) {
               const badge = row.querySelector('.status-badge');
-              if (badge) {
-                badge.className = "badge badge-success status-badge";
-                badge.innerText = "勤怠データ取得済";
+              
+              // ★修正ポイント2: 返された実際のステータス（res.data 内の情報、またはレスポンスメッセージ）を画面に反映
+              let returnedStatus = "勤怠データ取得済";
+              if (res.data && res.data.length > 0) {
+                const matched = res.data.find(item => item.name === staffName);
+                if (matched && matched.status) {
+                  returnedStatus = matched.status;
+                }
               }
+
+              if (badge) {
+                badge.className = getStatusBadgeClass(returnedStatus);
+                badge.innerText = returnedStatus;
+              }
+
               const updatedAtCell = row.querySelector('.status-updated-at');
               if (updatedAtCell) {
                 const now = new Date();
