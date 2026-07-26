@@ -105,7 +105,7 @@
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx0aFZ-w9Ueb2tl421-We_GPlKQDuoAZJ3EmEYY0_1irSxGEPA-bBqbSB6lBGfULvUL/exec";
-    const APP_VERSION = "1.2.48";
+    const APP_VERSION = "1.2.50";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -118,7 +118,7 @@
     const lastAuthTime = localStorage.getItem("admin_last_auth_time") || "0";
     window.addEventListener("DOMContentLoaded", runAuthentication);
 
-// ------------------------------------------------------------
+    // ------------------------------------------------------------
     // 🔒 認証・セキュリティ周り
     // ------------------------------------------------------------
     async function runAuthentication() {
@@ -247,35 +247,47 @@
     }
 
     // ------------------------------------------------------------
-    // ⚙️ GAS共通呼び出しラッパー (修正版)
+    // ⚙️ GAS共通呼び出しラッパー (自動リトライ機能付き)
     // ------------------------------------------------------------
     async function callGas(action, data = null) {
+      return await callGasWithRetry(action, data, 3, 1500);
+    }
+
+    async function callGasWithRetry(action, data = null, retries = 3, interval = 1500) {
       const savedUser = localStorage.getItem("admin_saved_username") || "";
       const savedPass = localStorage.getItem("admin_saved_password") || "";
       const payload = { action: action, username: savedUser, password: savedPass };
       if (data !== null) payload.data = data;
-  
-      try {
-        const response = await fetch(GAS_API_URL, { method: "POST", body: JSON.stringify(payload) });
-        const resData = await response.json();
-        
-        if (resData.authError) {
-          clearAuthStorage();
-          alert("セッションの有効期限が切れました。再ログインしてください。");
-          location.reload();
-          throw new Error("Auth Error");
+
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+          const response = await fetch(GAS_API_URL, { method: "POST", body: JSON.stringify(payload) });
+          const resData = await response.json();
+          
+          if (resData.authError) {
+            clearAuthStorage();
+            alert("セッションの有効期限が切れました。再ログインしてください。");
+            location.reload();
+            throw new Error("Auth Error");
+          }
+          
+          if (!resData.success) {
+            throw new Error(resData.error || "処理に失敗しました");
+          }
+          
+          localStorage.setItem("admin_last_auth_time", Date.now().toString());
+          return resData;
+        } catch (error) {
+          if (error.message === "Auth Error") throw error; // 認証エラーは即中断
+
+          if (attempt < retries) {
+            console.warn(`通信失敗 (${attempt}/${retries}回目): ${error.message}。${interval}ms後に再試行します...`);
+            await new Promise(resolve => setTimeout(resolve, interval));
+          } else {
+            console.error(`最大リトライ回数(${retries}回)に達したため失敗しました:`, error);
+            throw error;
+          }
         }
-        
-        if (!resData.success) {
-          throw new Error(resData.error || "処理に失敗しました");
-        }
-        
-        localStorage.setItem("admin_last_auth_time", Date.now().toString());
-        return resData;
-      } catch (error) {
-        alert("通信エラーが発生しました:\n" + error.message);
-        showLoading(false);
-        throw error;
       }
     }
 
@@ -388,7 +400,6 @@
           opt.innerText = staff.name;
           nameSelect.appendChild(opt);
 
-          // ★ ステータス・最終更新日時の取得と判定
           const staffStatusObj = existingStaffs.find(s => s.name === staff.name);
           const currentStatus = staffStatusObj ? staffStatusObj.status : "勤怠データ未取得";
           const updatedAtStr = (staffStatusObj && staffStatusObj.updatedAt) ? staffStatusObj.updatedAt : "-";
@@ -400,7 +411,6 @@
             badgeClass = "badge badge-success status-badge";
           }
 
-          // IDエスケープ（空白・特殊文字対策）
           const safeStaffId = encodeURIComponent(staff.name);
 
           staffRows += `
@@ -475,11 +485,11 @@
       let errorMessages = [];
 
       showLoading(true);
-      updateProgressMessage(successCount, totalCount, "勤怠同期");
+      updateProgressMessage(0, totalCount, "勤怠同期");
 
       for (let i = 0; i < targets.length; i++) {
         const staffName = targets[i];
-        updateProgressMessage(successCount, totalCount, "勤怠同期", staffName);
+        updateProgressMessage(i, totalCount, "勤怠同期", staffName);
 
         try {
           const res = await callGas("getAttendanceDataForSalary", {
@@ -515,8 +525,11 @@
             errorMessages.push(`【${staffName}】 ${res.error || "失敗しました"}`);
           }
         } catch (e) {
-          errorMessages.push(`【${staffName}】 通信エラーが発生しました`);
+          errorMessages.push(`【${staffName}】 通信エラーが発生しました (${e.message})`);
         }
+
+        // サーバ負荷・連続リクエスト調整用ウェイト (200ms)
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
 
       showLoading(false);
@@ -563,11 +576,11 @@
       let errorMessages = [];
 
       showLoading(true);
-      updateProgressMessage(successCount, totalCount, "明細作成");
+      updateProgressMessage(0, totalCount, "明細作成");
 
       for (let i = 0; i < targets.length; i++) {
         const staffName = targets[i];
-        updateProgressMessage(successCount, totalCount, "明細作成", staffName);
+        updateProgressMessage(i, totalCount, "明細作成", staffName);
 
         try {
           const res = await callGas("createStaffPayslip", {
@@ -602,8 +615,11 @@
             errorMessages.push(`【${staffName}】 ${res.error || "失敗しました"}`);
           }
         } catch (e) {
-          errorMessages.push(`【${staffName}】 通信エラーが発生しました`);
+          errorMessages.push(`【${staffName}】 通信エラーが発生しました (${e.message})`);
         }
+
+        // サーバ負荷・連続リクエスト調整用ウェイト (200ms)
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
 
       showLoading(false);
@@ -621,7 +637,7 @@
       
       let msg = `🔄 ${taskType}中... (${current} / ${total} 件完了)`;
       if (activeName) {
-        msg += `<br><span style="font-size: 0.9rem; color: #555; font-weight: normal;">現在: ${activeName} さんの明細を出力中...</span>`;
+        msg += `<br><span style="font-size: 0.9rem; color: #555; font-weight: normal;">現在: ${activeName} さんのデータを処理中...</span>`;
       }
       loadingEl.innerHTML = msg;
     }
