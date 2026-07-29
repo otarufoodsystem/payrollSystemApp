@@ -372,14 +372,15 @@
       
       nameSelect.innerHTML = '<option value="ALL">すべてのスタッフ (店舗全員)</option>';
       
+      // 店舗が未選択（選択肢をクリアした場合など）の初期表示
       if (!selectedStore) {
         if (resultArea) {
-          resultArea.innerHTML = '<div class="text-center text-muted">勤怠データを取得すると、ここに給与計算対象の一覧が表示されます。</div>';
+          resultArea.innerHTML = '<div class="text-center text-muted p-4">勤怠データを取得すると、ここに給与計算対象の一覧が表示されます。</div>';
         }
         return;
       }
     
-      // UIのロック
+      // UIのロック（二重操作防止）
       storeSelect.disabled = true;
       if (monthSelect) monthSelect.disabled = true;
       nameSelect.disabled = true;
@@ -407,17 +408,30 @@
     
         // チェック失敗（未登録スタッフが存在する、またはエラー時）
         if (!checkRes || !checkRes.success) {
-          alert(checkRes.error || "スタッフマスタ整合性チェックでエラーが発生しました。");
+          const errorMsg = (checkRes && checkRes.error) 
+            ? checkRes.error 
+            : "スタッフマスタ整合性チェックでエラーが発生しました。";
+    
+          // 1. エラーメッセージを表示（ポップアップ）
+          alert(errorMsg);
           
-          // 選択をリセットして操作ロックを解除
+          // 2. 店舗選択を未選択に戻す
           storeSelect.value = "";
+    
+          // 3. 画面のぐるぐるを消して初期状態の案内テキストに戻す
+          if (resultArea) {
+            resultArea.innerHTML = `<div class="alert alert-danger font-weight-bold m-3">${errorMsg.replace(/\n/g, '<br>')}</div>` +
+              '<div class="text-center text-muted p-3">店舗を正しく選択し直すか、スタッフマスタを確認してください。</div>';
+          }
+    
+          // 4. UIのロックを解除（操作可能に戻す）
           storeSelect.disabled = false;
           if (monthSelect) monthSelect.disabled = false;
-          
-          if (resultArea) {
-            resultArea.innerHTML = `<div class="alert alert-danger font-weight-bold">${checkRes.error}</div>`;
-          }
-          return; // ⛔ ここで処理中断
+          nameSelect.disabled = false;
+          if (fetchBtn) fetchBtn.disabled = false;
+          if (payslipBtn) payslipBtn.disabled = false;
+    
+          return; // ⛔ 処理中断
         }
     
         // 抽出された対象スタッフ（店舗一致 ＆ 在籍期間内）
@@ -466,7 +480,7 @@
         if (fetchBtn) fetchBtn.disabled = false;
         if (payslipBtn) payslipBtn.disabled = false;
     
-        // テーブル描画
+        // テーブル描画（正常完了時にぐるぐるが消えてテーブルに置き換わります）
         if (resultArea) {
           resultArea.innerHTML = `
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -493,8 +507,16 @@
     
       } catch (e) {
         alert("通信エラーが発生しました: " + e.message);
+        
+        // エラー時の画面リセットとロック解除
+        if (resultArea) {
+          resultArea.innerHTML = `<div class="alert alert-danger font-weight-bold">通信エラー: ${e.message}</div>`;
+        }
         storeSelect.disabled = false;
         if (monthSelect) monthSelect.disabled = false;
+        nameSelect.disabled = false;
+        if (fetchBtn) fetchBtn.disabled = false;
+        if (payslipBtn) payslipBtn.disabled = false;
       }
     }  
     
