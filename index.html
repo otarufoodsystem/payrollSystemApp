@@ -104,8 +104,8 @@
     // ------------------------------------------------------------
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwX7RbmIYEOIN3h-INU17tsbH6KSnSomsswN8qeFAmBKqEDsEuKWDi1W5hladZswT63/exec";
-    const APP_VERSION = "1.2.78";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzdP1QjS3W5pT2Ecg8Iigf1IfNv8vrH07AzrtkuAOaNJaNugJpUhVIxr9PRnT0Z4_Tb/exec";
+    const APP_VERSION = "1.2.79";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -378,92 +378,126 @@
         }
         return;
       }
-
+    
+      // UIのロック
       storeSelect.disabled = true;
       if (monthSelect) monthSelect.disabled = true;
       nameSelect.disabled = true;
       if (fetchBtn) fetchBtn.disabled = true;
       if (payslipBtn) payslipBtn.disabled = true;
-
+    
       if (resultArea) {
         resultArea.innerHTML = `
           <div class="text-center p-5 text-primary">
             <div class="spinner-border text-primary mb-3" role="status"></div>
-            <div class="font-weight-bold">🔄 現在の同期状況を確認中（処理中...）</div>
-            <small class="text-muted">スプレッドシートから最新の情報を読み込んでいます。しばらくお待ちください。</small>
+            <div class="font-weight-bold">🔄 スタッフマスタ整合性・同期状況を確認中...</div>
+            <small class="text-muted">タイムカードおよび給与マスタ情報を照合しています。</small>
           </div>
         `;
       }
-
-      let existingStaffs = [];
+    
       try {
-        const res = await callGas("checkSalaryStatus", { month: selectedMonth, store: selectedStore });
-        if (res && res.success) {
-          existingStaffs = res.existingStaffs || [];
+        // ------------------------------------------------------------
+        // ★ STEP 1: GAS側で「所属店舗・在籍期間・マスタ登録」を一括チェック
+        // ------------------------------------------------------------
+        const checkRes = await callGas("checkStaffMasterConsistency", {
+          store: selectedStore,
+          month: selectedMonth
+        });
+    
+        // チェック失敗（未登録スタッフが存在する、またはエラー時）
+        if (!checkRes || !checkRes.success) {
+          alert(checkRes.error || "スタッフマスタ整合性チェックでエラーが発生しました。");
+          
+          // 選択をリセットして操作ロックを解除
+          storeSelect.value = "";
+          storeSelect.disabled = false;
+          if (monthSelect) monthSelect.disabled = false;
+          
+          if (resultArea) {
+            resultArea.innerHTML = `<div class="alert alert-danger font-weight-bold">${checkRes.error}</div>`;
+          }
+          return; // ⛔ ここで処理中断
         }
-      } catch (e) {
-        console.error("ステータス確認エラー:", e);
-      }
-
-      let staffRows = "";
-      globalStaffList.forEach(staff => {
-        if (!staff.stores) return;
-        const belongStores = staff.stores.split(',').map(s => s.trim());
-        if (belongStores.includes(selectedStore)) {
+    
+        // 抽出された対象スタッフ（店舗一致 ＆ 在籍期間内）
+        const validStaffs = checkRes.validStaffs || [];
+    
+        // ------------------------------------------------------------
+        // ★ STEP 2: 現在の同期ステータスを取得
+        // ------------------------------------------------------------
+        let existingStaffs = [];
+        const statusRes = await callGas("checkSalaryStatus", { month: selectedMonth, store: selectedStore });
+        if (statusRes && statusRes.success) {
+          existingStaffs = statusRes.existingStaffs || [];
+        }
+    
+        // ------------------------------------------------------------
+        // ★ STEP 3: チェック通過スタッフのみで画面を描画
+        // ------------------------------------------------------------
+        let staffRows = "";
+        validStaffs.forEach(staffName => {
+          // ドロップダウンに追加
           const opt = document.createElement("option");
-          opt.value = staff.name;
-          opt.innerText = staff.name;
+          opt.value = staffName;
+          opt.innerText = staffName;
           nameSelect.appendChild(opt);
-
-          const staffStatusObj = existingStaffs.find(s => s.name === staff.name);
+    
+          // ステータス検索
+          const staffStatusObj = existingStaffs.find(s => s.name === staffName);
           const currentStatus = staffStatusObj ? staffStatusObj.status : "勤怠データ未取得";
           const updatedAtStr = (staffStatusObj && staffStatusObj.updatedAt) ? staffStatusObj.updatedAt : "-";
-
-          // ★修正ポイント1: ステータスに応じたバッジクラス判定を適用
           const badgeClass = getStatusBadgeClass(currentStatus);
-          const safeStaffId = encodeURIComponent(staff.name);
-
+          const safeStaffId = encodeURIComponent(staffName);
+    
           staffRows += `
             <tr id="row-${selectedStore}-${safeStaffId}">
               <td>${selectedMonth}月度</td>
-              <td class="font-weight-bold">${staff.name}</td>
+              <td class="font-weight-bold">${staffName}</td>
               <td><span class="${badgeClass}">${currentStatus}</span></td>
               <td class="text-muted status-updated-at" style="font-size: 0.85rem;">${updatedAtStr}</td>
             </tr>`;
+        });
+    
+        // ロック解除
+        storeSelect.disabled = false;
+        if (monthSelect) monthSelect.disabled = false;
+        nameSelect.disabled = false;
+        if (fetchBtn) fetchBtn.disabled = false;
+        if (payslipBtn) payslipBtn.disabled = false;
+    
+        // テーブル描画
+        if (resultArea) {
+          resultArea.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-weight-bold m-0 text-primary">📊 勤怠データ同期状況（${selectedStore}）</h6>
+              <small class="text-muted">リアルタイム同期中</small>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover m-0 bg-white" style="font-size: 0.9rem;">
+                <thead class="thead-light">
+                  <tr>
+                    <th>対象月度</th>
+                    <th>スタッフ名</th>
+                    <th>ステータス</th>
+                    <th>最終更新日時</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${staffRows ? staffRows : '<tr><td colspan="4" class="text-center text-muted">この条件（店舗・在籍期間）に一致するスタッフがいません。</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          `;
         }
-      });
-
-      storeSelect.disabled = false;
-      if (monthSelect) monthSelect.disabled = false;
-      nameSelect.disabled = false;
-      if (fetchBtn) fetchBtn.disabled = false;
-      if (payslipBtn) payslipBtn.disabled = false;
-
-      if (resultArea) {
-        resultArea.innerHTML = `
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h6 class="font-weight-bold m-0 text-primary">📊 勤怠データ同期状況（${selectedStore}）</h6>
-            <small class="text-muted">リアルタイム同期中</small>
-          </div>
-          <div class="table-responsive">
-            <table class="table table-bordered table-hover m-0 bg-white" style="font-size: 0.9rem;">
-              <thead class="thead-light">
-                <tr>
-                  <th>対象月度</th>
-                  <th>スタッフ名</th>
-                  <th>ステータス</th>
-                  <th>最終更新日時</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${staffRows ? staffRows : '<tr><td colspan="4" class="text-center text-muted">この店舗に所属するスタッフが登録されていません。</td></tr>'}
-              </tbody>
-            </table>
-          </div>
-        `;
+    
+      } catch (e) {
+        alert("通信エラーが発生しました: " + e.message);
+        storeSelect.disabled = false;
+        if (monthSelect) monthSelect.disabled = false;
       }
-    }
-  
+    }  
+    
     async function fetchAttendanceForSalary() {
       const month = document.getElementById("salary-month").value;
       const store = document.getElementById("salary-store").value;
