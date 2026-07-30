@@ -56,42 +56,43 @@
     <div id="tab-salary" class="tab-content active">
       <div class="card p-4 mb-4">
         <h5 class="font-weight-bold mb-3">勤怠データの呼び出し・給与計算</h5>
-        <div class="form-row align-items-end">
-          
-          <div class="col-md-2 mb-3">
+        
+        <!-- 上段：選択項目（横並び） -->
+        <div class="form-row">
+          <div class="col-md-4 mb-3">
             <label for="salary-month" class="font-weight-bold">対象月度 <span class="text-danger">*</span></label>
             <select id="salary-month" class="form-control"></select>
           </div>
           
-          <div class="col-md-3 mb-3">
+          <div class="col-md-4 mb-3">
             <label for="salary-store" class="font-weight-bold">対象店舗 <span class="text-danger">*</span></label>
             <select id="salary-store" class="form-control">
               <option value="">-- 店舗を選択してください（必須） --</option>
             </select>
           </div>
           
-          <div class="col-md-3 mb-3">
+          <div class="col-md-4 mb-3">
             <label for="salary-name" class="font-weight-bold">個人名（任意）</label>
             <select id="salary-name" class="form-control">
               <option value="ALL">すべてのスタッフ (店舗全員)</option>
             </select>
           </div>
-          
-          <div class="col-md-2 mb-3">
-            <button type="button" id="btn-fetch" class="btn btn-primary btn-block font-weight-bold" onclick="fetchAttendanceForSalary()">
-              🔄 勤怠データ取得
-            </button>
-            <button type="button" id="btn-payslip" class="btn btn-success btn-block font-weight-bold" onclick="generateStaffPayslips()">
-              📄 給与明細作成
-            </button>
-            <button type="button" id="btn-summary" class="btn btn-info btn-block font-weight-bold" onclick="handleCreateSummaryList()">
-              📊 給与明細一覧作成
-            </button>
-          </div>
-          
         </div>
-      </div>
 
+        <!-- 下段：操作ボタン（3つ横並び） -->
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          <button type="button" id="btn-fetch" class="btn btn-primary font-weight-bold mr-2 mb-2 flex-fill" onclick="fetchAttendanceForSalary()">
+            🔄 勤怠データ取得
+          </button>
+          <button type="button" id="btn-payslip" class="btn btn-success font-weight-bold mr-2 mb-2 flex-fill" onclick="generateStaffPayslips()">
+            📄 給与明細作成
+          </button>
+          <button type="button" id="btn-summary" class="btn btn-info font-weight-bold mb-2 flex-fill" onclick="handleCreateSummaryList()">
+            📊 給与明細一覧作成
+          </button>
+        </div>
+
+      </div>
       <div id="salary-result-area" class="card p-4">
         <div class="text-center text-muted">
           勤怠データを取得すると、ここに給与計算対象の一覧が表示されます。
