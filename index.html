@@ -81,11 +81,11 @@
             <button type="button" id="btn-fetch" class="btn btn-primary btn-block font-weight-bold" onclick="fetchAttendanceForSalary()">
               🔄 勤怠データ取得
             </button>
-          </div>
-
-          <div class="col-md-2 mb-3">
             <button type="button" id="btn-payslip" class="btn btn-success btn-block font-weight-bold" onclick="generateStaffPayslips()">
               📄 給与明細作成
+            </button>
+            <button id="btn-summary" class="btn btn-info" onclick="handleCreateSummaryList()">
+              📊 給与明細一覧作成
             </button>
           </div>
           
@@ -104,8 +104,8 @@
     // ------------------------------------------------------------
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzdP1QjS3W5pT2Ecg8Iigf1IfNv8vrH07AzrtkuAOaNJaNugJpUhVIxr9PRnT0Z4_Tb/exec";
-    const APP_VERSION = "1.2.79";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxArFLmzDIVx1BxwlIM_HM1pqe4nary7xnarB4jBEDJjUco-yID4SSf8TCUTEJfRG7n/exec";
+    const APP_VERSION = "1.2.80";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -744,6 +744,47 @@
         const res = await callGas("getStoreList");
         globalStoreList = res.data || [];
       } catch(e) { console.error("店舗マスタの同期に失敗しました", e); }
+    }
+    /**
+     * 給与明細一覧作成ボタン押下時のイベントハンドラ
+     */
+    async function handleCreateSummaryList() {
+      const storeSelect = document.getElementById("salary-store");
+      const monthSelect = document.getElementById("salary-month");
+      const summaryBtn = document.getElementById("btn-summary");
+    
+      const selectedStore = storeSelect ? storeSelect.value : "";
+      const selectedMonth = monthSelect ? monthSelect.value : "";
+    
+      if (!selectedStore) {
+        alert("対象店舗を選択してください。");
+        return;
+      }
+    
+      if (!confirm(`${selectedMonth}月度 [${selectedStore}] の「給与明細一覧」シートを作成しますか？`)) {
+        return;
+      }
+    
+      // ボタン非活性化
+      if (summaryBtn) summaryBtn.disabled = true;
+    
+      try {
+        const res = await callGas("createSalarySummaryList", {
+          month: selectedMonth,
+          store: selectedStore,
+          salarySpreadsheetId: typeof SALARY_SPREADSHEET_ID !== "undefined" ? SALARY_SPREADSHEET_ID : ""
+        });
+    
+        if (res && res.success) {
+          alert("✅ " + res.message);
+        } else {
+          alert("❌ 作成エラー: " + (res.error || "処理に失敗しました。"));
+        }
+      } catch (e) {
+        alert("通信エラーが発生しました: " + e.message);
+      } finally {
+        if (summaryBtn) summaryBtn.disabled = false;
+      }
     }
   </script>
 </body>
