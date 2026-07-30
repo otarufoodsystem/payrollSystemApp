@@ -752,7 +752,11 @@
     async function handleCreateSummaryList() {
       const storeSelect = document.getElementById("salary-store");
       const monthSelect = document.getElementById("salary-month");
+      const nameSelect = document.getElementById("salary-name");
+      const fetchBtn = document.getElementById("btn-fetch");
+      const payslipBtn = document.getElementById("btn-payslip");
       const summaryBtn = document.getElementById("btn-summary");
+      const resultArea = document.getElementById("salary-result-area");
     
       const selectedStore = storeSelect ? storeSelect.value : "";
       const selectedMonth = monthSelect ? monthSelect.value : "";
@@ -766,8 +770,24 @@
         return;
       }
     
-      // ボタン非活性化
+      // ★ 1. 全入力項目・ボタンの無効化（操作ブロック）
+      if (storeSelect) storeSelect.disabled = true;
+      if (monthSelect) monthSelect.disabled = true;
+      if (nameSelect) nameSelect.disabled = true;
+      if (fetchBtn) fetchBtn.disabled = true;
+      if (payslipBtn) payslipBtn.disabled = true;
       if (summaryBtn) summaryBtn.disabled = true;
+    
+      // ★ 2. 画面に「処理中」スピナー・警告テキストを表示
+      if (resultArea) {
+        resultArea.innerHTML = `
+          <div class="text-center p-5 bg-light rounded shadow-sm">
+            <div class="spinner-border text-info mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+            <h5 class="font-weight-bold text-info">⏳ 給与明細一覧シートを作成中...</h5>
+            <p class="text-muted m-0">データを集計・書き込みしています。完了するまでそのままお待ちください。</p>
+          </div>
+        `;
+      }
     
       try {
         const res = await callGas("createSalarySummaryList", {
@@ -778,12 +798,27 @@
     
         if (res && res.success) {
           alert("✅ " + res.message);
+          if (resultArea) {
+            resultArea.innerHTML = `<div class="alert alert-success font-weight-bold p-3">${res.message}</div>`;
+          }
         } else {
           alert("❌ 作成エラー: " + (res.error || "処理に失敗しました。"));
+          if (resultArea) {
+            resultArea.innerHTML = `<div class="alert alert-danger font-weight-bold p-3">${res.error}</div>`;
+          }
         }
       } catch (e) {
         alert("通信エラーが発生しました: " + e.message);
+        if (resultArea) {
+          resultArea.innerHTML = `<div class="alert alert-danger font-weight-bold p-3">通信エラー: ${e.message}</div>`;
+        }
       } finally {
+        // ★ 3. 処理完了・エラー発生後に操作のロックを解除
+        if (storeSelect) storeSelect.disabled = false;
+        if (monthSelect) monthSelect.disabled = false;
+        if (nameSelect) nameSelect.disabled = false;
+        if (fetchBtn) fetchBtn.disabled = false;
+        if (payslipBtn) payslipBtn.disabled = false;
         if (summaryBtn) summaryBtn.disabled = false;
       }
     }
