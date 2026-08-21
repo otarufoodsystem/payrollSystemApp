@@ -192,6 +192,7 @@
             if (mainApp) mainApp.style.display = "block";
             
             initSalaryForm();
+            initTransferForm();
             showLoading(false);
             resetTimeoutTimer();
             return;
@@ -276,6 +277,13 @@
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       if(document.getElementById(`tab-${type}-btn`)) document.getElementById(`tab-${type}-btn`).classList.add('active');
       if(document.getElementById(`tab-${type}`)) document.getElementById(`tab-${type}`).classList.add('active');
+      // ★ 振込タブが開かれた際に月度が空なら初期化を実行
+      if (type === 'transfer') {
+        const transferMonthSelect = document.getElementById("transfer-month");
+        if (transferMonthSelect && transferMonthSelect.options.length === 0) {
+          initTransferForm();
+        }
+      }
     }
 
     // ------------------------------------------------------------
@@ -853,43 +861,53 @@
         if (summaryBtn) summaryBtn.disabled = false;
       }
     }
-    // ------------------------------------------------------------
-    // 🏦 給与振込メニュー UI制御・データ取得
-    // ------------------------------------------------------------
     
-    // 初期化時に実行（runAuthentication 成功時などに呼び出し）
+    // ------------------------------------------------------------
+    // 🏦 給与振込メニュー 初期化関数（修正版）
+    // ------------------------------------------------------------
     async function initTransferForm() {
-      const monthSelect = document.getElementById("transfer-month");
-      if (!monthSelect) return;
-      monthSelect.innerHTML = "";
-      
-      // 対象月度選択肢の作成（給与計算と同様の選択肢を設定）
-      const now = new Date();
-      for (let i = -4; i <= 1; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-        const y = d.getFullYear();
-        const m = d.getMonth() + 1;
-        const mStr = m < 10 ? "0" + m : m;
-        const val = `${y}/${mStr}`;
-        
-        const prevD = new Date(y, d.getMonth() - 1, 1);
-        const prevM = prevD.getMonth() + 1;
-        const text = `${y}年${m}月度 (${prevM}/16 ～ ${m}/15)`;
-        
-        const opt = document.createElement("option");
-        opt.value = val;
-        opt.innerText = text;
-        monthSelect.appendChild(opt);
+      const transferMonthSelect = document.getElementById("transfer-month");
+      const salaryMonthSelect = document.getElementById("salary-month"); // 既存の給与計算用月度ID
+    
+      if (!transferMonthSelect) {
+        console.warn("transfer-month エレメントが見つかりません。");
+        return;
       }
     
-      let currentMonthString = now.getFullYear() + "/" + ((now.getMonth() + 1) < 10 ? "0" + (now.getMonth() + 1) : (now.getMonth() + 1));
-      if (now.getDate() < 16) {
-        const prevM = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        currentMonthString = prevM.getFullYear() + "/" + ((prevM.getMonth() + 1) < 10 ? "0" + (prevM.getMonth() + 1) : (prevM.getMonth() + 1));
-      }
-      monthSelect.value = currentMonthString;
+      // 1. 給与計算側の選択肢が存在していれば、そのままコピーして同期
+      if (salaryMonthSelect && salaryMonthSelect.options.length > 0) {
+        transferMonthSelect.innerHTML = salaryMonthSelect.innerHTML;
+        transferMonthSelect.value = salaryMonthSelect.value;
+      } else {
+        // 2. 給与計算側が未セットの場合は独自に選択肢を生成
+        transferMonthSelect.innerHTML = "";
+        const now = new Date();
+        for (let i = -4; i <= 1; i++) {
+          const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+          const y = d.getFullYear();
+          const m = d.getMonth() + 1;
+          const mStr = m < 10 ? "0" + m : m;
+          const val = `${y}/${mStr}`;
     
-      // 会社マスタ取得呼び出し
+          const prevD = new Date(y, d.getMonth() - 1, 1);
+          const prevM = prevD.getMonth() + 1;
+          const text = `${y}年${m}月度 (${prevM}/16 ～ ${m}/15)`;
+    
+          const opt = document.createElement("option");
+          opt.value = val;
+          opt.innerText = text;
+          transferMonthSelect.appendChild(opt);
+        }
+    
+        let currentMonthString = now.getFullYear() + "/" + ((now.getMonth() + 1) < 10 ? "0" + (now.getMonth() + 1) : (now.getMonth() + 1));
+        if (now.getDate() < 16) {
+          const prevM = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          currentMonthString = prevM.getFullYear() + "/" + ((prevM.getMonth() + 1) < 10 ? "0" + (prevM.getMonth() + 1) : (prevM.getMonth() + 1));
+        }
+        transferMonthSelect.value = currentMonthString;
+      }
+    
+      // 会社マスタ取得の呼び出し
       await loadCompanyList();
     }
     
