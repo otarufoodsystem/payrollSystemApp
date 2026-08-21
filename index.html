@@ -99,14 +99,48 @@
         </div>
       </div>
     </div>
+    <!-- タブ切り替えボタン部（現行のtab-salary-btnの横に追加） -->
+    <div class="d-flex border-bottom mb-4 bg-white rounded p-1 shadow-sm">
+      <button id="tab-salary-btn" class="tab-btn active" onclick="switchTab('salary')">💰 給与計算メニュー</button>
+      <button id="tab-transfer-btn" class="tab-btn" onclick="switchTab('transfer')">🏦 給与振込メニュー</button>
+    </div>
+    
+    <!-- タブコンテンツ：給与振込メニュー（新規追加） -->
+    <div id="tab-transfer" class="tab-content">
+      <div class="card p-4 mb-4">
+        <h5 class="font-weight-bold mb-3">🏦 給与振込データ参照・メニュー</h5>
+        
+        <!-- 上部：選択項目（対象月度・会社名） -->
+        <div class="form-row">
+          <div class="col-md-6 mb-3">
+            <label for="transfer-month" class="font-weight-bold">対象月度 <span class="text-danger">*</span></label>
+            <select id="transfer-month" class="form-control" onchange="loadTransferStaffList()"></select>
+          </div>
+          
+          <div class="col-md-6 mb-3">
+            <label for="transfer-company" class="font-weight-bold">会社名 <span class="text-danger">*</span></label>
+            <select id="transfer-company" class="form-control" onchange="loadTransferStaffList()">
+              <option value="">-- 会社を選択してください --</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    
+      <!-- 下部：スタッフ一覧表示エリア -->
+      <div id="transfer-result-area" class="card p-4">
+        <div class="text-center text-muted">
+          対象月度および会社名を選択すると、ここにスタッフ一覧・振込金額が表示されます。
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
     // ------------------------------------------------------------
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxoroyoFuBXlD4ujJY8O5GlOiw2MMFO46f-0_2lc3f9RahvTtV1RwhRQ7wD6QpuZLS2/exec";
-    const APP_VERSION = "1.2.132";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwLYqPWkh4kNV-KLz2nnUZBZ4sLEG6rqtPS-yWh1yoKEhXIzBVbY62SQwwvtgqrP_64/exec";
+    const APP_VERSION = "1.2.133";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -820,6 +854,151 @@
         if (fetchBtn) fetchBtn.disabled = false;
         if (payslipBtn) payslipBtn.disabled = false;
         if (summaryBtn) summaryBtn.disabled = false;
+      }
+    }
+    // ------------------------------------------------------------
+    // 🏦 給与振込メニュー UI制御・データ取得
+    // ------------------------------------------------------------
+    
+    // 初期化時に実行（runAuthentication 成功時などに呼び出し）
+    async function initTransferForm() {
+      const monthSelect = document.getElementById("transfer-month");
+      if (!monthSelect) return;
+      monthSelect.innerHTML = "";
+      
+      // 対象月度選択肢の作成（給与計算と同様の選択肢を設定）
+      const now = new Date();
+      for (let i = -4; i <= 1; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        const y = d.getFullYear();
+        const m = d.getMonth() + 1;
+        const mStr = m < 10 ? "0" + m : m;
+        const val = `${y}/${mStr}`;
+        
+        const prevD = new Date(y, d.getMonth() - 1, 1);
+        const prevM = prevD.getMonth() + 1;
+        const text = `${y}年${m}月度 (${prevM}/16 ～ ${m}/15)`;
+        
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.innerText = text;
+        monthSelect.appendChild(opt);
+      }
+    
+      let currentMonthString = now.getFullYear() + "/" + ((now.getMonth() + 1) < 10 ? "0" + (now.getMonth() + 1) : (now.getMonth() + 1));
+      if (now.getDate() < 16) {
+        const prevM = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        currentMonthString = prevM.getFullYear() + "/" + ((prevM.getMonth() + 1) < 10 ? "0" + (prevM.getMonth() + 1) : (prevM.getMonth() + 1));
+      }
+      monthSelect.value = currentMonthString;
+    
+      // 会社マスタ取得呼び出し
+      await loadCompanyList();
+    }
+    
+    // 会社名リストのロード（給与ファイルの会社マスタ A列より）
+    async function loadCompanyList() {
+      const companySelect = document.getElementById("transfer-company");
+      if (!companySelect) return;
+    
+      try {
+        const res = await callGas("getCompanyList");
+        if (res && res.success) {
+          companySelect.innerHTML = '<option value="">-- 会社を選択してください --</option>';
+          (res.data || []).forEach(company => {
+            const opt = document.createElement("option");
+            opt.value = company;
+            opt.innerText = company;
+            companySelect.appendChild(opt);
+          });
+        }
+      } catch (e) {
+        console.error("会社マスタの取得に失敗しました", e);
+      }
+    }
+    
+    // 対象月度・会社名選択時のスタッフ一覧表示処理
+    async function loadTransferStaffList() {
+      const month = document.getElementById("transfer-month").value;
+      const company = document.getElementById("transfer-company").value;
+      const resultArea = document.getElementById("transfer-result-area");
+    
+      if (!month || !company) {
+        if (resultArea) {
+          resultArea.innerHTML = '<div class="text-center text-muted p-4">対象月度および会社名を選択すると、ここにスタッフ一覧・振込金額が表示されます。</div>';
+        }
+        return;
+      }
+    
+      if (resultArea) {
+        resultArea.innerHTML = `
+          <div class="text-center p-4 text-primary">
+            <div class="spinner-border text-primary mb-2" role="status"></div>
+            <div class="font-weight-bold">🔄 振込対象スタッフデータを取得中...</div>
+          </div>`;
+      }
+    
+      try {
+        const res = await callGas("getTransferStaffList", { month: month, company: company });
+    
+        if (!res || !res.success) {
+          if (resultArea) {
+            resultArea.innerHTML = `<div class="alert alert-danger m-3">${res.error || "データの取得に失敗しました。"}</div>`;
+          }
+          return;
+        }
+    
+        const staffList = res.data || [];
+        if (staffList.length === 0) {
+          if (resultArea) {
+            resultArea.innerHTML = '<div class="text-center text-muted p-4">該当する振込対象スタッフが見つかりませんでした。</div>';
+          }
+          return;
+        }
+    
+        let rowsHtml = "";
+        staffList.forEach(item => {
+          // 数値フォーマット処理（円表記）
+          const formattedAmount = (typeof item.amount === 'number') 
+            ? "￥" + item.amount.toLocaleString() 
+            : item.amount;
+    
+          rowsHtml += `
+            <tr>
+              <td class="font-weight-bold">${item.name}</td>
+              <td>${item.storeName || "-"}</td>
+              <td class="text-right font-weight-bold text-success">${formattedAmount}</td>
+              <td class="text-center">${item.method || "-"}</td>
+            </tr>`;
+        });
+    
+        if (resultArea) {
+          resultArea.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="font-weight-bold m-0 text-primary">👥 振込対象スタッフ一覧（${company} / ${month}月度）</h6>
+              <small class="text-muted">該当件数: ${staffList.length} 件</small>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover m-0 bg-white" style="font-size: 0.9rem;">
+                <thead class="thead-light">
+                  <tr>
+                    <th>氏名</th>
+                    <th>店舗</th>
+                    <th class="text-right">支給金額</th>
+                    <th class="text-center">支給方法</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rowsHtml}
+                </tbody>
+              </table>
+            </div>`;
+        }
+    
+      } catch (e) {
+        if (resultArea) {
+          resultArea.innerHTML = `<div class="alert alert-danger font-weight-bold p-3">通信エラー: ${e.message}</div>`;
+        }
       }
     }
   </script>
