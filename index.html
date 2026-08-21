@@ -49,10 +49,12 @@
       <button class="btn btn-outline-light btn-sm" onclick="triggerTimeout()">ログアウト</button>
     </nav>
 
+    <!-- タブ切り替えボタン部（現行のtab-salary-btnの横に追加） -->
     <div class="d-flex border-bottom mb-4 bg-white rounded p-1 shadow-sm">
       <button id="tab-salary-btn" class="tab-btn active" onclick="switchTab('salary')">💰 給与計算メニュー</button>
+      <button id="tab-transfer-btn" class="tab-btn" onclick="switchTab('transfer')">🏦 給与振込メニュー</button>
     </div>
-
+    
     <div id="tab-salary" class="tab-content active">
       <div class="card p-4 mb-4">
         <h5 class="font-weight-bold mb-3">勤怠データの呼び出し・給与計算</h5>
@@ -98,11 +100,6 @@
           勤怠データを取得すると、ここに給与計算対象の一覧が表示されます。
         </div>
       </div>
-    </div>
-    <!-- タブ切り替えボタン部（現行のtab-salary-btnの横に追加） -->
-    <div class="d-flex border-bottom mb-4 bg-white rounded p-1 shadow-sm">
-      <button id="tab-salary-btn" class="tab-btn active" onclick="switchTab('salary')">💰 給与計算メニュー</button>
-      <button id="tab-transfer-btn" class="tab-btn" onclick="switchTab('transfer')">🏦 給与振込メニュー</button>
     </div>
     
     <!-- タブコンテンツ：給与振込メニュー（新規追加） -->
