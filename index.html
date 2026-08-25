@@ -149,7 +149,7 @@
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzpk7n9nGhA66RZI2rYs2JpwWXPVKOc-NJXaPoyQqqMBuJVROhKyaVWYnem7F844bYx/exec";
-    const APP_VERSION = "1.3.0";
+    const APP_VERSION = "1.3.1";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -1030,52 +1030,58 @@
     }
 
     // 全銀ファイル作成・ダウンロード処理
-    async function generateZenginFile() {
-      const targetMonth = document.getElementById("transferTargetMonth").value;
-      const transferDate = document.getElementById("transferDate").value;
-    
-      if (!targetMonth || !transferDate) {
-        alert("対象月度と振込指定日を入力してください。");
+    function generateZenginFile() {
+      // 1. HTMLの id="transfer-date" から値を取得
+      const dateInput = document.getElementById('transfer-date');
+      
+      if (!dateInput || !dateInput.value) {
+        alert('振込指定日を選択してください。');
         return;
       }
     
-      const password = prompt("パスワードを入力してください:");
-      if (!password) return;
+      // 2. YYYY-MM-DD 形式から MMDD (4桁) へ変換
+      // 例: "2026-05-25" -> ["2026", "05", "25"] -> "0525"
+      const dateParts = dateInput.value.split('-');
+      if (dateParts.length !== 3) {
+        alert('振込指定日の形式が正しくありません。');
+        return;
+      }
+      const transferDateMMDD = dateParts[1] + dateParts[2]; // MMDD
     
-      // 振込指定日をMMDD形式に変換
-      const tDate = new Date(transferDate);
-      const mmdd = ("0" + (tDate.getMonth() + 1)).slice(-2) + ("0" + tDate.getDate()).slice(-2);
+      // 3. 画面上の会社選択や対象月を取得（既存のID名に合わせて調整してください）
+      const companySelect = document.getElementById('transfer-company-select') || document.getElementById('companySelect');
+      const targetMonthInput = document.getElementById('transfer-target-month') || document.getElementById('targetMonth');
     
-      const requestData = {
-        action: "createZenginData",
-        password: password,
-        targetMonth: targetMonth,
-        transferDate: mmdd
+      const params = {
+        companyName: companySelect ? companySelect.value : '',
+        targetMonth: targetMonthInput ? targetMonthInput.value : '',
+        transferDate: transferDateMMDD
       };
     
-      try {
-        const response = await fetch(GAS_WEB_APP_URL, {
-          method: "POST",
-          body: JSON.stringify(requestData)
-        });
-        const result = await response.json();
+      // 4. GAS サーバー処理の呼び出し (google.script.run の場合)
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response && response.status === 'success') {
+            downloadTextFile(response.fileName, response.textData);
+          } else {
+            alert('エラー: ' + (response ? response.message : 'データの生成に失敗しました。'));
+          }
+        })
+        .withFailureHandler(function(err) {
+          alert('通信エラーが発生しました: ' + err.message);
+        })
+        .createZenginData(params);
+    }
     
-        if (result.status === "error") {
-          alert("エラー: " + result.message);
-          return;
-        }
-    
-        // テキストファイルとしてダウンロード
-        const blob = new Blob([result.fileContent], { type: "text/plain;charset=shift_jis" });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = `給与振込データ_${targetMonth.replace("-", "")}.txt`;
-        link.click();
-    
-      } catch (error) {
-        console.error("エラー:", error);
-        alert("通信エラーが発生しました。");
-      }
+    // テキストファイルダウンロード処理
+    function downloadTextFile(fileName, textData) {
+      const blob = new Blob([textData], { type: 'text/plain;charset=shift_jis;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }    
   </script>
 </body>
