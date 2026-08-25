@@ -1031,27 +1031,29 @@
 
     // 全銀ファイル作成・ダウンロード処理
     async function generateZenginFile() {
-      // 1. 日付の取得と入力チェック
+      console.log('=== 全銀データ作成処理を開始します ===');
+    
+      // 1. 日付の取得と検証
       const dateInput = document.getElementById('transfer-date');
       if (!dateInput || !dateInput.value) {
         alert('振込指定日を選択してください。');
         return;
       }
     
-      // YYYY-MM-DD -> MMDD 形式へ変換 (例: "2026-05-25" -> "0525")
       const dateParts = dateInput.value.split('-');
       if (dateParts.length !== 3) {
         alert('振込指定日の形式が正しくありません。');
         return;
       }
-      const transferDateMMDD = dateParts[1] + dateParts[2];
+      const transferDateMMDD = dateParts[1] + dateParts[2]; // 例: "0525"
     
-      // 2. 検索条件・パラメータの取得（画面の既存要素に合わせて調整してください）
+      // 2. 画面上の会社選択・対象月要素を取得
       const companySelect = document.getElementById('transfer-company-select') || document.getElementById('companySelect');
       const targetMonthInput = document.getElementById('transfer-target-month') || document.getElementById('targetMonth');
     
+      // 3. 送信ペイロードの組み立て
       const payload = {
-        action: 'createZenginData', // doPost側で受けるアクション名
+        action: 'createZenginData',
         params: {
           companyName: companySelect ? companySelect.value : '',
           targetMonth: targetMonthInput ? targetMonthInput.value : '',
@@ -1059,32 +1061,50 @@
         }
       };
     
+      console.log('送信データ:', payload);
+    
+      // 4. API URLの指定（※システムで定義されているGASのWeb App URLを入力してください）
+      // 既存のグローバル変数がある場合は `typeof API_URL !== 'undefined' ? API_URL : 'https://...'` のように指定
+      const targetUrl = typeof GAS_API_URL !== 'undefined' ? GAS_API_URL : (typeof ENDPOINT_URL !== 'undefined' ? ENDPOINT_URL : '');
+    
+      if (!targetUrl) {
+        alert('通信先URL（GAS_API_URL）が設定されていません。JSコード内の targetUrl を確認してください。');
+        return;
+      }
+    
       try {
-        // 3. fetch による doPost 実行
-        const response = await fetch(GAS_API_URL, {
+        console.log('リクエスト送信中...', targetUrl);
+        
+        // GAS側でのCORS対策として text/plain を使用
+        const response = await fetch(targetUrl, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'text/plain;charset=utf-8',
           },
           body: JSON.stringify(payload)
         });
     
+        console.log('レスポンス受信:', response);
+    
         const result = await response.json();
+        console.log('GAS返却結果:', result);
     
         if (result && result.status === 'success') {
           downloadTextFile(result.fileName, result.textData);
         } else {
-          alert('エラー: ' + (result ? result.message : '全銀データの作成に失敗しました。'));
+          const errorMsg = (result && result.message) ? result.message : 'データの生成に失敗しました。';
+          alert('エラー: ' + errorMsg);
         }
+    
       } catch (error) {
+        console.error('通信例外エラー:', error);
         alert('通信エラーが発生しました: ' + error.message);
       }
     }
     
-    // テキストファイルのダウンロード処理
+    // ファイルダウンロード関数
     function downloadTextFile(fileName, textData) {
-      // Shift_JIS指定またはUTF-8（全銀用テキスト）
-      const blob = new Blob([textData], { type: 'text/plain;charset=utf-8;' });
+      const blob = new Blob([textData], { type: 'text/plain;charset=shift_jis;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = fileName;
