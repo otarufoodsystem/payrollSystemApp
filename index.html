@@ -149,7 +149,7 @@
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzpk7n9nGhA66RZI2rYs2JpwWXPVKOc-NJXaPoyQqqMBuJVROhKyaVWYnem7F844bYx/exec";
-    const APP_VERSION = "1.3.1";
+    const APP_VERSION = "1.3.2";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -1061,8 +1061,7 @@
     
       try {
         // 3. fetch による doPost 実行
-        // ※ 既存処理で定義されているAPIエンドポイントのURL変数（例: API_URL や SCRIPT_URL）をご使用ください
-        const response = await fetch(API_URL, {
+        const response = await fetch(GAS_API_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
