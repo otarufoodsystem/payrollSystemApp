@@ -102,24 +102,36 @@
       </div>
     </div>
     
-    <!-- タブコンテンツ：給与振込メニュー（新規追加） -->
+    <!-- タブコンテンツ：給与振込メニュー -->
     <div id="tab-transfer" class="tab-content">
       <div class="card p-4 mb-4">
-        <h5 class="font-weight-bold mb-3">🏦 給与振込データ参照・メニュー</h5>
+        <h5 class="font-weight-bold mb-3">🏦 給与振込データ参照・全銀ファイル出力</h5>
         
-        <!-- 上部：選択項目（対象月度・会社名） -->
+        <!-- 上部：選択項目（対象月度・会社名・振込指定日） -->
         <div class="form-row">
-          <div class="col-md-6 mb-3">
+          <div class="col-md-4 mb-3">
             <label for="transfer-month" class="font-weight-bold">対象月度 <span class="text-danger">*</span></label>
             <select id="transfer-month" class="form-control" onchange="loadTransferStaffList()"></select>
           </div>
           
-          <div class="col-md-6 mb-3">
+          <div class="col-md-4 mb-3">
             <label for="transfer-company" class="font-weight-bold">会社名 <span class="text-danger">*</span></label>
             <select id="transfer-company" class="form-control" onchange="loadTransferStaffList()">
               <option value="">-- 会社を選択してください --</option>
             </select>
           </div>
+
+          <div class="col-md-4 mb-3">
+            <label for="transfer-date" class="font-weight-bold">振込指定日</label>
+            <input type="date" id="transfer-date" class="form-control">
+          </div>
+        </div>
+
+        <!-- 全銀ファイル作成ボタン -->
+        <div class="mt-2">
+          <button type="button" class="btn btn-success font-weight-bold" onclick="generateZenginFile()">
+            📄 全銀振込データ出力 (.txt)
+          </button>
         </div>
       </div>
     
@@ -136,8 +148,8 @@
     // ------------------------------------------------------------
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwLYqPWkh4kNV-KLz2nnUZBZ4sLEG6rqtPS-yWh1yoKEhXIzBVbY62SQwwvtgqrP_64/exec";
-    const APP_VERSION = "1.2.133";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzpk7n9nGhA66RZI2rYs2JpwWXPVKOc-NJXaPoyQqqMBuJVROhKyaVWYnem7F844bYx/exec";
+    const APP_VERSION = "1.3.0";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -1016,6 +1028,55 @@
         }
       }
     }
+
+    // 全銀ファイル作成・ダウンロード処理
+    async function generateZenginFile() {
+      const targetMonth = document.getElementById("transferTargetMonth").value;
+      const transferDate = document.getElementById("transferDate").value;
+    
+      if (!targetMonth || !transferDate) {
+        alert("対象月度と振込指定日を入力してください。");
+        return;
+      }
+    
+      const password = prompt("パスワードを入力してください:");
+      if (!password) return;
+    
+      // 振込指定日をMMDD形式に変換
+      const tDate = new Date(transferDate);
+      const mmdd = ("0" + (tDate.getMonth() + 1)).slice(-2) + ("0" + tDate.getDate()).slice(-2);
+    
+      const requestData = {
+        action: "createZenginData",
+        password: password,
+        targetMonth: targetMonth,
+        transferDate: mmdd
+      };
+    
+      try {
+        const response = await fetch(GAS_WEB_APP_URL, {
+          method: "POST",
+          body: JSON.stringify(requestData)
+        });
+        const result = await response.json();
+    
+        if (result.status === "error") {
+          alert("エラー: " + result.message);
+          return;
+        }
+    
+        // テキストファイルとしてダウンロード
+        const blob = new Blob([result.fileContent], { type: "text/plain;charset=shift_jis" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `給与振込データ_${targetMonth.replace("-", "")}.txt`;
+        link.click();
+    
+      } catch (error) {
+        console.error("エラー:", error);
+        alert("通信エラーが発生しました。");
+      }
+    }    
   </script>
 </body>
 </html>
