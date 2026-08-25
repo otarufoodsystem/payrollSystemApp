@@ -1030,59 +1030,69 @@
     }
 
     // 全銀ファイル作成・ダウンロード処理
-    function generateZenginFile() {
-      // 1. HTMLの id="transfer-date" から値を取得
+    async function generateZenginFile() {
+      // 1. 日付の取得と入力チェック
       const dateInput = document.getElementById('transfer-date');
-      
       if (!dateInput || !dateInput.value) {
         alert('振込指定日を選択してください。');
         return;
       }
     
-      // 2. YYYY-MM-DD 形式から MMDD (4桁) へ変換
-      // 例: "2026-05-25" -> ["2026", "05", "25"] -> "0525"
+      // YYYY-MM-DD -> MMDD 形式へ変換 (例: "2026-05-25" -> "0525")
       const dateParts = dateInput.value.split('-');
       if (dateParts.length !== 3) {
         alert('振込指定日の形式が正しくありません。');
         return;
       }
-      const transferDateMMDD = dateParts[1] + dateParts[2]; // MMDD
+      const transferDateMMDD = dateParts[1] + dateParts[2];
     
-      // 3. 画面上の会社選択や対象月を取得（既存のID名に合わせて調整してください）
+      // 2. 検索条件・パラメータの取得（画面の既存要素に合わせて調整してください）
       const companySelect = document.getElementById('transfer-company-select') || document.getElementById('companySelect');
       const targetMonthInput = document.getElementById('transfer-target-month') || document.getElementById('targetMonth');
     
-      const params = {
-        companyName: companySelect ? companySelect.value : '',
-        targetMonth: targetMonthInput ? targetMonthInput.value : '',
-        transferDate: transferDateMMDD
+      const payload = {
+        action: 'createZenginData', // doPost側で受けるアクション名
+        params: {
+          companyName: companySelect ? companySelect.value : '',
+          targetMonth: targetMonthInput ? targetMonthInput.value : '',
+          transferDate: transferDateMMDD
+        }
       };
     
-      // 4. GAS サーバー処理の呼び出し (google.script.run の場合)
-      google.script.run
-        .withSuccessHandler(function(response) {
-          if (response && response.status === 'success') {
-            downloadTextFile(response.fileName, response.textData);
-          } else {
-            alert('エラー: ' + (response ? response.message : 'データの生成に失敗しました。'));
-          }
-        })
-        .withFailureHandler(function(err) {
-          alert('通信エラーが発生しました: ' + err.message);
-        })
-        .createZenginData(params);
+      try {
+        // 3. fetch による doPost 実行
+        // ※ 既存処理で定義されているAPIエンドポイントのURL変数（例: API_URL や SCRIPT_URL）をご使用ください
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: JSON.stringify(payload)
+        });
+    
+        const result = await response.json();
+    
+        if (result && result.status === 'success') {
+          downloadTextFile(result.fileName, result.textData);
+        } else {
+          alert('エラー: ' + (result ? result.message : '全銀データの作成に失敗しました。'));
+        }
+      } catch (error) {
+        alert('通信エラーが発生しました: ' + error.message);
+      }
     }
     
-    // テキストファイルダウンロード処理
+    // テキストファイルのダウンロード処理
     function downloadTextFile(fileName, textData) {
-      const blob = new Blob([textData], { type: 'text/plain;charset=shift_jis;' });
+      // Shift_JIS指定またはUTF-8（全銀用テキスト）
+      const blob = new Blob([textData], { type: 'text/plain;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    }    
+    }
   </script>
 </body>
 </html>
