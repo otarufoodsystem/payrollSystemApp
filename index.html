@@ -1047,52 +1047,32 @@
       }
       const transferDateMMDD = dateParts[1] + dateParts[2]; // 例: "0525"
     
-      // 2. 画面上の会社選択・対象月要素を取得
-      const companySelect = document.getElementById('transfer-company-select') || document.getElementById('companySelect');
-      const targetMonthInput = document.getElementById('transfer-target-month') || document.getElementById('targetMonth');
+      // 2. 画面上の会社選択・対象月要素を取得（IDを他の関数と統一）
+      const companyVal = document.getElementById('transfer-company')?.value || '';
+      const monthVal = document.getElementById('transfer-month')?.value || '';
     
-      // 3. 送信ペイロードの組み立て
-      const payload = {
-        action: 'createZenginData',
-        params: {
-          companyName: companySelect ? companySelect.value : '',
-          targetMonth: targetMonthInput ? targetMonthInput.value : '',
-          transferDate: transferDateMMDD
-        }
-      };
-    
-      console.log('送信データ:', payload);
-    
-      // 4. API URLの指定（※システムで定義されているGASのWeb App URLを入力してください）
-      // 既存のグローバル変数がある場合は `typeof API_URL !== 'undefined' ? API_URL : 'https://...'` のように指定
-      const targetUrl = typeof GAS_API_URL !== 'undefined' ? GAS_API_URL : (typeof ENDPOINT_URL !== 'undefined' ? ENDPOINT_URL : '');
-    
-      if (!targetUrl) {
-        alert('通信先URL（GAS_API_URL）が設定されていません。JSコード内の targetUrl を確認してください。');
+      if (!companyVal || !monthVal) {
+        alert('会社名および対象月度を選択してください。');
         return;
       }
     
+      // 3. 通信実行（callGasラッパー関数を使用）
       try {
-        console.log('リクエスト送信中...', targetUrl);
+        console.log('リクエスト送信中...', { companyName: companyVal, targetMonth: monthVal, transferDate: transferDateMMDD });
         
-        // GAS側でのCORS対策として text/plain を使用
-        const response = await fetch(targetUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'text/plain;charset=utf-8',
-          },
-          body: JSON.stringify(payload)
+        // 他の関数と同様に callGas を呼び出す
+        const result = await callGas("createZenginData", {
+          companyName: companyVal,
+          targetMonth: monthVal,
+          transferDate: transferDateMMDD
         });
     
-        console.log('レスポンス受信:', response);
-    
-        const result = await response.json();
         console.log('GAS返却結果:', result);
     
-        if (result && result.status === 'success') {
-          downloadTextFile(result.fileName, result.textData);
+        if (result && (result.status === 'success' || result.success)) {
+          downloadTextFile(result.fileName || '全銀振込データ.txt', result.textData || result.data);
         } else {
-          const errorMsg = (result && result.message) ? result.message : 'データの生成に失敗しました。';
+          const errorMsg = (result && (result.message || result.error)) ? (result.message || result.error) : 'データの生成に失敗しました。';
           alert('エラー: ' + errorMsg);
         }
     
