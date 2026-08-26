@@ -875,17 +875,18 @@
     }
     
     // ------------------------------------------------------------
-    // 🏦 給与振込メニュー 初期化関数（修正版）
+    // 🏦 給与振込メニュー 初期化関数
     // ------------------------------------------------------------
     async function initTransferForm() {
       const transferMonthSelect = document.getElementById("transfer-month");
       const salaryMonthSelect = document.getElementById("salary-month"); // 既存の給与計算用月度ID
-    
+      const methodSelect = document.getElementById("transfer-method-filter");
+
       if (!transferMonthSelect) {
         console.warn("transfer-month エレメントが見つかりません。");
         return;
       }
-    
+
       // 1. 給与計算側の選択肢が存在していれば、そのままコピーして同期
       if (salaryMonthSelect && salaryMonthSelect.options.length > 0) {
         transferMonthSelect.innerHTML = salaryMonthSelect.innerHTML;
@@ -900,17 +901,17 @@
           const m = d.getMonth() + 1;
           const mStr = m < 10 ? "0" + m : m;
           const val = `${y}/${mStr}`;
-    
+
           const prevD = new Date(y, d.getMonth() - 1, 1);
           const prevM = prevD.getMonth() + 1;
           const text = `${y}年${m}月度 (${prevM}/16 ～ ${m}/15)`;
-    
+
           const opt = document.createElement("option");
           opt.value = val;
           opt.innerText = text;
           transferMonthSelect.appendChild(opt);
         }
-    
+
         let currentMonthString = now.getFullYear() + "/" + ((now.getMonth() + 1) < 10 ? "0" + (now.getMonth() + 1) : (now.getMonth() + 1));
         if (now.getDate() < 16) {
           const prevM = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -918,16 +919,22 @@
         }
         transferMonthSelect.value = currentMonthString;
       }
-    
+
+      // 支給方法フィルターの変更イベントを設定
+      if (methodSelect) {
+        methodSelect.removeEventListener("change", loadTransferStaffList);
+        methodSelect.addEventListener("change", loadTransferStaffList);
+      }
+
       // 会社マスタ取得の呼び出し
       await loadCompanyList();
     }
-    
+
     // 会社名リストのロード（給与ファイルの会社マスタ A列より）
     async function loadCompanyList() {
       const companySelect = document.getElementById("transfer-company");
       if (!companySelect) return;
-    
+
       try {
         const res = await callGas("getCompanyList");
         if (res && res.success) {
@@ -943,20 +950,25 @@
         console.error("会社マスタの取得に失敗しました", e);
       }
     }
-    
-    // 対象月度・会社名選択時のスタッフ一覧表示処理
+
+    // 対象月度・会社名・支給方法選択時のスタッフ一覧表示および合計計算処理
     async function loadTransferStaffList() {
-      const month = document.getElementById("transfer-month").value;
-      const company = document.getElementById("transfer-company").value;
-      const resultArea = document.getElementById("transfer-result-area");
-    
+      const monthSelect = document.getElementById("transfer-month");
+      const companySelect = document.getElementById("transfer-company");
+      const methodSelect = document.getElementById("transfer-method-filter");
+      const resultArea = document.getElementById("salary-transfer-result-area") || document.getElementById("transfer-result-area");
+
+      const month = monthSelect ? monthSelect.value : "";
+      const company = companySelect ? companySelect.value : "";
+      const filterMethod = methodSelect ? methodSelect.value : "銀行振込"; // デフォルト「銀行振込」
+
       if (!month || !company) {
         if (resultArea) {
           resultArea.innerHTML = '<div class="text-center text-muted p-4">対象月度および会社名を選択すると、ここにスタッフ一覧・振込金額が表示されます。</div>';
         }
         return;
       }
-    
+
       if (resultArea) {
         resultArea.innerHTML = `
           <div class="text-center p-4 text-primary">
@@ -964,32 +976,58 @@
             <div class="font-weight-bold">🔄 振込対象スタッフデータを取得中...</div>
           </div>`;
       }
-    
+
       try {
         const res = await callGas("getTransferStaffList", { month: month, company: company });
-    
+
         if (!res || !res.success) {
           if (resultArea) {
             resultArea.innerHTML = `<div class="alert alert-danger m-3">${res.error || "データの取得に失敗しました。"}</div>`;
           }
           return;
         }
-    
-        const staffList = res.data || [];
+
+        const rawStaffList = res.data || [];
+        
+        // 支給方法による絞り込み（フィルター）
+        const staffList = rawStaffList.filter(item => {
+          if (!filterMethod || filterMethod === "ALL") return true;
+          return item.method === filterMethod;
+        });
+
         if (staffList.length === 0) {
           if (resultArea) {
-            resultArea.innerHTML = '<div class="text-center text-muted p-4">該当する振込対象スタッフが見つかりませんでした。</div>';
+            resultArea.innerHTML = `
+              <div class="p-3 bg-light rounded border mb-3">
+                <div class="form-row align-items-center">
+                  <div class="col-auto">
+                    <label class="col-form-label font-weight-bold text-secondary">支給方法絞り込み:</label>
+                  </div>
+                  <div class="col-auto">
+                    <select id="transfer-method-filter" class="form-control form-control-sm" onchange="loadTransferStaffList()">
+                      <option value="銀行振込" ${filterMethod === '銀行振込' ? 'selected' : ''}>銀行振込</option>
+                      <option value="現金" ${filterMethod === '現金' ? 'selected' : ''}>現金</option>
+                      <option value="ALL" ${filterMethod === 'ALL' ? 'selected' : ''}>すべて表示</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="text-center text-muted p-4">該当する振込対象スタッフが見つかりませんでした。</div>`;
           }
           return;
         }
-    
+
+        let totalAmount = 0;
         let rowsHtml = "";
+
         staffList.forEach(item => {
+          // 金額の数値変換と合計加算
+          const rawNum = typeof item.amount === 'number' ? item.amount : parseFloat(String(item.amount).replace(/[^0-9.-]+/g, "")) || 0;
+          totalAmount += rawNum;
+
           // 数値フォーマット処理（円表記）
-          const formattedAmount = (typeof item.amount === 'number') 
-            ? "￥" + item.amount.toLocaleString() 
-            : item.amount;
-    
+          const formattedAmount = "￥" + rawNum.toLocaleString();
+
           rowsHtml += `
             <tr>
               <td class="font-weight-bold">${item.name}</td>
@@ -998,10 +1036,31 @@
               <td class="text-center">${item.method || "-"}</td>
             </tr>`;
         });
-    
+
         if (resultArea) {
           resultArea.innerHTML = `
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <!-- 絞り込みコントロール & 合計表示エリア -->
+            <div class="card bg-light mb-3 border-secondary">
+              <div class="card-body p-3">
+                <div class="row align-items-center">
+                  <div class="col-md-6 d-flex align-items-center mb-2 mb-md-0">
+                    <label for="transfer-method-filter" class="font-weight-bold mr-2 m-0 text-dark" style="white-space: nowrap;">支給方法:</label>
+                    <select id="transfer-method-filter" class="form-control form-control-sm w-auto" onchange="loadTransferStaffList()">
+                      <option value="銀行振込" ${filterMethod === '銀行振込' ? 'selected' : ''}>銀行振込</option>
+                      <option value="現金" ${filterMethod === '現金' ? 'selected' : ''}>現金</option>
+                      <option value="ALL" ${filterMethod === 'ALL' ? 'selected' : ''}>すべて表示</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6 text-md-right">
+                    <span class="h6 font-weight-bold text-dark mr-2">合計支給金額:</span>
+                    <span class="h4 font-weight-bold text-primary mb-0">￥${totalAmount.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- テーブル領域 -->
+            <div class="d-flex justify-content-between align-items-center mb-2">
               <h6 class="font-weight-bold m-0 text-primary">👥 振込対象スタッフ一覧（${company} / ${month}月度）</h6>
               <small class="text-muted">該当件数: ${staffList.length} 件</small>
             </div>
@@ -1021,7 +1080,7 @@
               </table>
             </div>`;
         }
-    
+
       } catch (e) {
         if (resultArea) {
           resultArea.innerHTML = `<div class="alert alert-danger font-weight-bold p-3">通信エラー: ${e.message}</div>`;
@@ -1032,56 +1091,55 @@
     // 全銀ファイル作成・ダウンロード処理
     async function generateZenginFile() {
       console.log('=== 全銀データ作成処理を開始します ===');
-    
+
       // 1. 日付の取得と検証
       const dateInput = document.getElementById('transfer-date');
       if (!dateInput || !dateInput.value) {
         alert('振込指定日を選択してください。');
         return;
       }
-    
+
       const dateParts = dateInput.value.split('-');
       if (dateParts.length !== 3) {
         alert('振込指定日の形式が正しくありません。');
         return;
       }
       const transferDateMMDD = dateParts[1] + dateParts[2]; // 例: "0525"
-    
-      // 2. 画面上の会社選択・対象月要素を取得（IDを他の関数と統一）
+
+      // 2. 画面上の会社選択・対象月要素を取得
       const companyVal = document.getElementById('transfer-company')?.value || '';
       const monthVal = document.getElementById('transfer-month')?.value || '';
-    
+
       if (!companyVal || !monthVal) {
         alert('会社名および対象月度を選択してください。');
         return;
       }
-    
+
       // 3. 通信実行（callGasラッパー関数を使用）
       try {
         console.log('リクエスト送信中...', { companyName: companyVal, targetMonth: monthVal, transferDate: transferDateMMDD });
-        
-        // 他の関数と同様に callGas を呼び出す
+
         const result = await callGas("createZenginData", {
           companyName: companyVal,
           targetMonth: monthVal,
           transferDate: transferDateMMDD
         });
-    
+
         console.log('GAS返却結果:', result);
-    
+
         if (result && (result.status === 'success' || result.success)) {
           downloadTextFile(result.fileName || '全銀振込データ.txt', result.textData || result.data);
         } else {
           const errorMsg = (result && (result.message || result.error)) ? (result.message || result.error) : 'データの生成に失敗しました。';
           alert('エラー: ' + errorMsg);
         }
-    
+
       } catch (error) {
         console.error('通信例外エラー:', error);
         alert('通信エラーが発生しました: ' + error.message);
       }
     }
-    
+
     // ファイルダウンロード関数
     function downloadTextFile(fileName, textData) {
       const blob = new Blob([textData], { type: 'text/plain;charset=shift_jis;' });
