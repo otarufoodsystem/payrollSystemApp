@@ -148,8 +148,8 @@
     // ------------------------------------------------------------
     // ⚙️ 環境設定・定数
     // ------------------------------------------------------------
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwMyWIx-dx1-zRAhGi1qDqU5FrHLUAjQqvJd9sQWNqj8FlXNsrj3ujYy6wsPlJf6WT8/exec";
-    const APP_VERSION = "1.3.6";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzKCgiDgA6cR2DzOODbuYIIICzZ1cUZtPJXeGCO55x5sGLG1ykc2_XceOIICpC4LdC4/exec";
+    const APP_VERSION = "1.3.7";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -303,8 +303,11 @@
     // ------------------------------------------------------------
     function getStatusBadgeClass(status) {
       if (!status) return "badge badge-secondary status-badge";
-      if (status.indexOf("要確認") !== -1) {
-        return "badge badge-warning status-badge"; // 要確認は黄色バッジ
+      
+      if (status === "勤怠データエラー") {
+        return "badge badge-danger status-badge btn-status-click"; // 赤ボタン
+      } else if (status === "勤怠データワーニング" || status.indexOf("要確認") !== -1) {
+        return "badge badge-warning status-badge btn-status-click"; // 黄ボタン
       } else if (status === "給与明細作成済") {
         return "badge badge-primary status-badge";
       } else if (status === "勤怠データ取得済") {
@@ -313,6 +316,25 @@
       return "badge badge-secondary status-badge";
     }
 
+    // アラート情報を一時保持するグローバルオブジェクト
+    let globalAlertLogs = {};
+    
+    /**
+     * 勤怠データ不備/ワーニングクリック時のダイアログ表示関数
+     */
+    function showAttendanceAlertDetails(store, staffName) {
+      const key = `${store}_${staffName}`;
+      const alerts = globalAlertLogs[key];
+    
+      if (!alerts || alerts.length === 0) {
+        alert("該当の警告・エラー内容はありません。");
+        return;
+      }
+    
+      const alertMessage = `【${staffName} 様 勤怠チェック結果】\n\n` + alerts.join("\n");
+      alert(alertMessage);
+    }
+    
     // ------------------------------------------------------------
     // ⚙️ GAS共通呼び出しラッパー (自動リトライ機能付き)
     // ------------------------------------------------------------
@@ -516,11 +538,21 @@
           const badgeClass = getStatusBadgeClass(currentStatus);
           const safeStaffId = encodeURIComponent(staffName);
     
+          // ★ 追記箇所①：アラート情報（checkAlerts）をグローバル領域に保持
+          const cacheKey = `${selectedStore}_${staffName}`;
+          globalAlertLogs[cacheKey] = (staffStatusObj && staffStatusObj.checkAlerts) ? staffStatusObj.checkAlerts : [];
+    
+          // ★ 追記箇所②：エラー／ワーニング時のクリック属性（onclick）を設定
+          let badgeOnClickAttr = "";
+          if (currentStatus === "勤怠データエラー" || currentStatus === "勤怠データワーニング") {
+            badgeOnClickAttr = `onclick="showAttendanceAlertDetails('${selectedStore}', '${staffName}')" style="cursor: pointer;"`;
+          }
+    
           staffRows += `
             <tr id="row-${selectedStore}-${safeStaffId}">
               <td>${selectedMonth}月度</td>
               <td class="font-weight-bold">${staffName}</td>
-              <td><span class="${badgeClass}">${currentStatus}</span></td>
+              <td><span class="${badgeClass}" ${badgeOnClickAttr}>${currentStatus}</span></td>
               <td class="text-muted status-updated-at" style="font-size: 0.85rem;">${updatedAtStr}</td>
             </tr>`;
         });
@@ -576,10 +608,10 @@
       const month = document.getElementById("salary-month").value;
       const store = document.getElementById("salary-store").value;
       const name = document.getElementById("salary-name").value;
-  
+    
       if (!month) { alert("対象月度を選択してください。"); return; }
       if (!store) { alert("店舗名を選択してください。"); return; }
-  
+    
       let targets = [];
       if (name === "ALL") {
         globalStaffList.forEach(staff => {
@@ -592,23 +624,23 @@
       } else {
         targets.push(name);
       }
-
+    
       if (targets.length === 0) {
         alert("処理対象のスタッフが見つかりません。");
         return;
       }
-
+    
       const totalCount = targets.length;
       let successCount = 0;
       let errorMessages = [];
-
+    
       showLoading(true);
       updateProgressMessage(0, totalCount, "勤怠同期");
-
+    
       for (let i = 0; i < targets.length; i++) {
         const staffName = targets[i];
         updateProgressMessage(i, totalCount, "勤怠同期", staffName);
-
+    
         try {
           const res = await callGas("getAttendanceDataForSalary", {
             salarySpreadsheetId: SALARY_SPREADSHEET_ID,
@@ -621,23 +653,40 @@
             successCount++;
             const safeStaffId = encodeURIComponent(staffName);
             const row = document.getElementById(`row-${store}-${safeStaffId}`);
+            
+            // ★ 変更点①：レスポンスから最新のステータスとアラート情報を抽出
+            let returnedStatus = "勤怠データ取得済";
+            let checkAlerts = [];
+    
+            if (res.data && res.data.length > 0) {
+              const matched = res.data.find(item => item.name === staffName);
+              if (matched) {
+                if (matched.status) returnedStatus = matched.status;
+                if (matched.checkAlerts) checkAlerts = matched.checkAlerts;
+              }
+            }
+    
+            // ★ 変更点②：最新のアラートログをグローバル変数に保存
+            const cacheKey = `${store}_${staffName}`;
+            globalAlertLogs[cacheKey] = checkAlerts;
+    
             if (row) {
               const badge = row.querySelector('.status-badge');
-              
-              // ★修正ポイント2: 返された実際のステータス（res.data 内の情報、またはレスポンスメッセージ）を画面に反映
-              let returnedStatus = "勤怠データ取得済";
-              if (res.data && res.data.length > 0) {
-                const matched = res.data.find(item => item.name === staffName);
-                if (matched && matched.status) {
-                  returnedStatus = matched.status;
-                }
-              }
-
+    
               if (badge) {
                 badge.className = getStatusBadgeClass(returnedStatus);
                 badge.innerText = returnedStatus;
+    
+                // ★ 変更点③：エラー／ワーニング時にクリックイベントを設定
+                if (returnedStatus === "勤怠データエラー" || returnedStatus === "勤怠データワーニング") {
+                  badge.setAttribute("onclick", `showAttendanceAlertDetails('${store}', '${staffName}')`);
+                  badge.style.cursor = "pointer";
+                } else {
+                  badge.removeAttribute("onclick");
+                  badge.style.cursor = "default";
+                }
               }
-
+    
               const updatedAtCell = row.querySelector('.status-updated-at');
               if (updatedAtCell) {
                 const now = new Date();
@@ -656,13 +705,13 @@
         } catch (e) {
           errorMessages.push(`【${staffName}】 通信エラーが発生しました (${e.message})`);
         }
-
+    
         // サーバ負荷・連続リクエスト調整用ウェイト (200ms)
         await new Promise(resolve => setTimeout(resolve, 200));
       }
-
+    
       showLoading(false);
-
+    
       if (errorMessages.length === 0) {
         alert(`同期処理がすべて完了しました！\n（成功: ${successCount} 件 / 全: ${totalCount} 件）`);
       } else {
