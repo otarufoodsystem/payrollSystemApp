@@ -49,7 +49,7 @@
       <button class="btn btn-outline-light btn-sm" onclick="triggerTimeout()">ログアウト</button>
     </nav>
 
-    <!-- タブ切り替えボタン部（現行のtab-salary-btnの横に追加） -->
+    <!-- タブ切り替えボタン部 -->
     <div class="d-flex border-bottom mb-4 bg-white rounded p-1 shadow-sm">
       <button id="tab-salary-btn" class="tab-btn active" onclick="switchTab('salary')">💰 給与計算メニュー</button>
       <button id="tab-transfer-btn" class="tab-btn" onclick="switchTab('transfer')">🏦 給与振込メニュー</button>
@@ -59,7 +59,6 @@
       <div class="card p-4 mb-4">
         <h5 class="font-weight-bold mb-3">勤怠データの呼び出し・給与計算</h5>
         
-        <!-- 上段：選択項目（横並び） -->
         <div class="form-row">
           <div class="col-md-4 mb-3">
             <label for="salary-month" class="font-weight-bold">対象月度 <span class="text-danger">*</span></label>
@@ -81,7 +80,6 @@
           </div>
         </div>
 
-        <!-- 下段：操作ボタン（3つ横並び） -->
         <div class="d-flex flex-wrap gap-2 mt-2">
           <button type="button" id="btn-fetch" class="btn btn-primary font-weight-bold mr-2 mb-2 flex-fill" onclick="fetchAttendanceForSalary()">
             🔄 勤怠データ取得
@@ -107,7 +105,6 @@
       <div class="card p-4 mb-4">
         <h5 class="font-weight-bold mb-3">🏦 給与振込データ参照・全銀ファイル出力</h5>
         
-        <!-- 上部：選択項目（対象月度・会社名・振込指定日） -->
         <div class="form-row">
           <div class="col-md-4 mb-3">
             <label for="transfer-month" class="font-weight-bold">対象月度 <span class="text-danger">*</span></label>
@@ -126,13 +123,6 @@
             <input type="date" id="transfer-date" class="form-control">
           </div>
         </div>
-
-        <!-- 全銀ファイル作成ボタン -->
-        <div class="mt-2">
-          <button type="button" class="btn btn-success font-weight-bold" onclick="generateZenginFile()">
-            📄 全銀振込データ出力 (.txt)
-          </button>
-        </div>
       </div>
     
       <!-- 下部：スタッフ一覧表示エリア -->
@@ -145,11 +135,8 @@
   </div>
 
   <script>
-    // ------------------------------------------------------------
-    // ⚙️ 環境設定・定数
-    // ------------------------------------------------------------
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxogFxSnfiAD8qVFDTUe0H-9tBGHt8JiYAmurgXkb-XyNlWqve7nlyR2ChKlItGlwsi/exec";
-    const APP_VERSION = "1.3.8";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxpltZEBI7CbqzAAGwEC7dwShlPjxaELRfJGynYV4Uf4umUWjdXLmlzdFIaWWvokyRo/exec";
+    const APP_VERSION = "1.3.10";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -162,9 +149,6 @@
     const lastAuthTime = localStorage.getItem("admin_last_auth_time") || "0";
     window.addEventListener("DOMContentLoaded", runAuthentication);
 
-    // ------------------------------------------------------------
-    // 🔒 認証・セキュリティ周り
-    // ------------------------------------------------------------
     async function runAuthentication() {
       if (document.getElementById("app-version")) document.getElementById("app-version").innerText = APP_VERSION;
 
@@ -289,7 +273,6 @@
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       if(document.getElementById(`tab-${type}-btn`)) document.getElementById(`tab-${type}-btn`).classList.add('active');
       if(document.getElementById(`tab-${type}`)) document.getElementById(`tab-${type}`).classList.add('active');
-      // ★ 振込タブが開かれた際に月度が空なら初期化を実行
       if (type === 'transfer') {
         const transferMonthSelect = document.getElementById("transfer-month");
         if (transferMonthSelect && transferMonthSelect.options.length === 0) {
@@ -298,16 +281,13 @@
       }
     }
 
-    // ------------------------------------------------------------
-    // ⚙️ ステータスバッジの共通判定関数（新設）
-    // ------------------------------------------------------------
     function getStatusBadgeClass(status) {
       if (!status) return "badge badge-secondary status-badge";
       
       if (status === "勤怠データエラー") {
-        return "badge badge-danger status-badge btn-status-click"; // 赤ボタン
+        return "badge badge-danger status-badge btn-status-click";
       } else if (status === "勤怠データワーニング" || status.indexOf("要確認") !== -1) {
-        return "badge badge-warning status-badge btn-status-click"; // 黄ボタン
+        return "badge badge-warning status-badge btn-status-click";
       } else if (status === "給与明細作成済") {
         return "badge badge-primary status-badge";
       } else if (status === "勤怠データ取得済") {
@@ -316,12 +296,8 @@
       return "badge badge-secondary status-badge";
     }
 
-    // アラート情報を一時保持するグローバルオブジェクト
     let globalAlertLogs = {};
     
-    /**
-     * 勤怠データ不備/ワーニングクリック時のダイアログ表示関数
-     */
     function showAttendanceAlertDetails(store, staffName) {
       const key = `${store}_${staffName}`;
       const alerts = globalAlertLogs[key];
@@ -335,9 +311,6 @@
       alert(alertMessage);
     }
     
-    // ------------------------------------------------------------
-    // ⚙️ GAS共通呼び出しラッパー (自動リトライ機能付き)
-    // ------------------------------------------------------------
     async function callGas(action, data = null) {
       return await callGasWithRetry(action, data, 3, 1500);
     }
@@ -380,9 +353,6 @@
       }
     }
 
-    // ------------------------------------------------------------
-    // 💰 給与計算 UI制御・データ取得
-    // ------------------------------------------------------------
     function initSalaryForm() {
       const monthSelect = document.getElementById("salary-month");
       if (!monthSelect) return;
@@ -446,7 +416,6 @@
       
       nameSelect.innerHTML = '<option value="ALL">すべてのスタッフ (店舗全員)</option>';
       
-      // 店舗が未選択（選択肢をクリアした場合など）の初期表示
       if (!selectedStore) {
         if (resultArea) {
           resultArea.innerHTML = '<div class="text-center text-muted p-4">勤怠データを取得すると、ここに給与計算対象の一覧が表示されます。</div>';
@@ -454,7 +423,6 @@
         return;
       }
     
-      // UIのロック（二重操作防止）
       storeSelect.disabled = true;
       if (monthSelect) monthSelect.disabled = true;
       nameSelect.disabled = true;
@@ -472,77 +440,56 @@
       }
     
       try {
-        // ------------------------------------------------------------
-        // ★ STEP 1: GAS側で「所属店舗・在籍期間・マスタ登録」を一括チェック
-        // ------------------------------------------------------------
         const checkRes = await callGas("checkStaffMasterConsistency", {
           store: selectedStore,
           month: selectedMonth
         });
     
-        // チェック失敗（未登録スタッフが存在する、またはエラー時）
         if (!checkRes || !checkRes.success) {
           const errorMsg = (checkRes && checkRes.error) 
             ? checkRes.error 
             : "スタッフマスタ整合性チェックでエラーが発生しました。";
     
-          // 1. エラーメッセージを表示（ポップアップ）
           alert(errorMsg);
-          
-          // 2. 店舗選択を未選択に戻す
           storeSelect.value = "";
     
-          // 3. 画面のぐるぐるを消して初期状態の案内テキストに戻す
           if (resultArea) {
             resultArea.innerHTML = `<div class="alert alert-danger font-weight-bold m-3">${errorMsg.replace(/\n/g, '<br>')}</div>` +
               '<div class="text-center text-muted p-3">店舗を正しく選択し直すか、スタッフマスタを確認してください。</div>';
           }
     
-          // 4. UIのロックを解除（操作可能に戻す）
           storeSelect.disabled = false;
           if (monthSelect) monthSelect.disabled = false;
           nameSelect.disabled = false;
           if (fetchBtn) fetchBtn.disabled = false;
           if (payslipBtn) payslipBtn.disabled = false;
     
-          return; // ⛔ 処理中断
+          return;
         }
     
-        // 抽出された対象スタッフ（店舗一致 ＆ 在籍期間内）
         const validStaffs = checkRes.validStaffs || [];
-    
-        // ------------------------------------------------------------
-        // ★ STEP 2: 現在の同期ステータスを取得
-        // ------------------------------------------------------------
         let existingStaffs = [];
         const statusRes = await callGas("checkSalaryStatus", { month: selectedMonth, store: selectedStore });
         if (statusRes && statusRes.success) {
           existingStaffs = statusRes.existingStaffs || [];
         }
     
-        // ------------------------------------------------------------
-        // ★ STEP 3: チェック通過スタッフのみで画面を描画
-        // ------------------------------------------------------------
         let staffRows = "";
         validStaffs.forEach(staffName => {
-          // ドロップダウンに追加
           const opt = document.createElement("option");
           opt.value = staffName;
           opt.innerText = staffName;
           nameSelect.appendChild(opt);
     
-          // ステータス検索
           const staffStatusObj = existingStaffs.find(s => s.name === staffName);
           const currentStatus = staffStatusObj ? staffStatusObj.status : "勤怠データ未取得";
           const updatedAtStr = (staffStatusObj && staffStatusObj.updatedAt) ? staffStatusObj.updatedAt : "-";
           const badgeClass = getStatusBadgeClass(currentStatus);
           const safeStaffId = encodeURIComponent(staffName);
     
-          // ★ 追記箇所①：アラート情報（checkAlerts）をグローバル領域に保持
           const cacheKey = `${selectedStore}_${staffName}`;
           globalAlertLogs[cacheKey] = (staffStatusObj && staffStatusObj.checkAlerts) ? staffStatusObj.checkAlerts : [];
     
-          // ★ 追記箇所②：エラー／ワーニング時のクリック属性（onclick）を設定
           let badgeOnClickAttr = "";
           if (currentStatus === "勤怠データエラー" || currentStatus === "勤怠データワーニング") {
             badgeOnClickAttr = `onclick="showAttendanceAlertDetails('${selectedStore}', '${staffName}')" style="cursor: pointer;"`;
@@ -557,14 +504,12 @@
             </tr>`;
         });
     
-        // ロック解除
         storeSelect.disabled = false;
         if (monthSelect) monthSelect.disabled = false;
         nameSelect.disabled = false;
         if (fetchBtn) fetchBtn.disabled = false;
         if (payslipBtn) payslipBtn.disabled = false;
     
-        // テーブル描画（正常完了時にぐるぐるが消えてテーブルに置き換わります）
         if (resultArea) {
           resultArea.innerHTML = `
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -592,7 +537,6 @@
       } catch (e) {
         alert("通信エラーが発生しました: " + e.message);
         
-        // エラー時の画面リセットとロック解除
         if (resultArea) {
           resultArea.innerHTML = `<div class="alert alert-danger font-weight-bold">通信エラー: ${e.message}</div>`;
         }
@@ -654,7 +598,6 @@
             const safeStaffId = encodeURIComponent(staffName);
             const row = document.getElementById(`row-${store}-${safeStaffId}`);
             
-            // ★ 変更点①：レスポンスから最新のステータスとアラート情報を抽出
             let returnedStatus = "勤怠データ取得済";
             let checkAlerts = [];
     
@@ -666,7 +609,6 @@
               }
             }
     
-            // ★ 変更点②：最新のアラートログをグローバル変数に保存
             const cacheKey = `${store}_${staffName}`;
             globalAlertLogs[cacheKey] = checkAlerts;
     
@@ -677,7 +619,6 @@
                 badge.className = getStatusBadgeClass(returnedStatus);
                 badge.innerText = returnedStatus;
     
-                // ★ 変更点③：エラー／ワーニング時にクリックイベントを設定
                 if (returnedStatus === "勤怠データエラー" || returnedStatus === "勤怠データワーニング") {
                   badge.setAttribute("onclick", `showAttendanceAlertDetails('${store}', '${staffName}')`);
                   badge.style.cursor = "pointer";
@@ -706,7 +647,6 @@
           errorMessages.push(`【${staffName}】 通信エラーが発生しました (${e.message})`);
         }
     
-        // サーバ負荷・連続リクエスト調整用ウェイト (200ms)
         await new Promise(resolve => setTimeout(resolve, 200));
       }
     
@@ -768,10 +708,8 @@
           });
 
           if (res && res.success) {
-            // レスポンスの階層差を吸収（res直下、または res.data 内を参照）
             const resObj = res.data || res;
             
-            // skipped フラグ、または message に "スキップ" が含まれているかチェック
             const isSkipped = resObj.skipped === true || 
                               (resObj.message && String(resObj.message).indexOf("スキップ") !== -1) ||
                               (res.message && String(res.message).indexOf("スキップ") !== -1);
@@ -779,7 +717,6 @@
             if (isSkipped) {
               console.log(`${staffName} さんはスキップされたため、画面表示を保持します。`);
             } else {
-              // 実際に明細作成された場合のみ画面を「給与明細作成済」に更新
               successCount++;
               const safeStaffId = encodeURIComponent(staffName);
               const row = document.getElementById(`row-${store}-${safeStaffId}`);
@@ -809,7 +746,6 @@
           errorMessages.push(`【${staffName}】 通信エラーが発生しました (${e.message})`);
         }
 
-        // サーバ負荷・連続リクエスト調整用ウェイト (200ms)
         await new Promise(resolve => setTimeout(resolve, 200));
       }
 
@@ -846,9 +782,7 @@
         globalStoreList = res.data || [];
       } catch(e) { console.error("店舗マスタの同期に失敗しました", e); }
     }
-    /**
-     * 給与明細一覧作成ボタン押下時のイベントハンドラ
-     */
+
     async function handleCreateSummaryList() {
       const storeSelect = document.getElementById("salary-store");
       const monthSelect = document.getElementById("salary-month");
@@ -870,7 +804,6 @@
         return;
       }
     
-      // ★ 1. 全入力項目・ボタンの無効化（操作ブロック）
       if (storeSelect) storeSelect.disabled = true;
       if (monthSelect) monthSelect.disabled = true;
       if (nameSelect) nameSelect.disabled = true;
@@ -878,7 +811,6 @@
       if (payslipBtn) payslipBtn.disabled = true;
       if (summaryBtn) summaryBtn.disabled = true;
     
-      // ★ 2. 画面に「処理中」スピナー・警告テキストを表示
       if (resultArea) {
         resultArea.innerHTML = `
           <div class="text-center p-5 bg-light rounded shadow-sm">
@@ -913,7 +845,6 @@
           resultArea.innerHTML = `<div class="alert alert-danger font-weight-bold p-3">通信エラー: ${e.message}</div>`;
         }
       } finally {
-        // ★ 3. 処理完了・エラー発生後に操作のロックを解除
         if (storeSelect) storeSelect.disabled = false;
         if (monthSelect) monthSelect.disabled = false;
         if (nameSelect) nameSelect.disabled = false;
@@ -923,12 +854,9 @@
       }
     }
     
-    // ------------------------------------------------------------
-    // 🏦 給与振込メニュー 初期化関数
-    // ------------------------------------------------------------
     async function initTransferForm() {
       const transferMonthSelect = document.getElementById("transfer-month");
-      const salaryMonthSelect = document.getElementById("salary-month"); // 既存の給与計算用月度ID
+      const salaryMonthSelect = document.getElementById("salary-month");
       const methodSelect = document.getElementById("transfer-method-filter");
 
       if (!transferMonthSelect) {
@@ -936,12 +864,10 @@
         return;
       }
 
-      // 1. 給与計算側の選択肢が存在していれば、そのままコピーして同期
       if (salaryMonthSelect && salaryMonthSelect.options.length > 0) {
         transferMonthSelect.innerHTML = salaryMonthSelect.innerHTML;
         transferMonthSelect.value = salaryMonthSelect.value;
       } else {
-        // 2. 給与計算側が未セットの場合は独自に選択肢を生成
         transferMonthSelect.innerHTML = "";
         const now = new Date();
         for (let i = -4; i <= 1; i++) {
@@ -969,17 +895,14 @@
         transferMonthSelect.value = currentMonthString;
       }
 
-      // 支給方法フィルターの変更イベントを設定
       if (methodSelect) {
         methodSelect.removeEventListener("change", loadTransferStaffList);
         methodSelect.addEventListener("change", loadTransferStaffList);
       }
 
-      // 会社マスタ取得の呼び出し
       await loadCompanyList();
     }
 
-    // 会社名リストのロード（給与ファイルの会社マスタ A列より）
     async function loadCompanyList() {
       const companySelect = document.getElementById("transfer-company");
       if (!companySelect) return;
@@ -1000,7 +923,6 @@
       }
     }
 
-    // 対象月度・会社名・支給方法選択時のスタッフ一覧表示および合計計算処理
     async function loadTransferStaffList() {
       const monthSelect = document.getElementById("transfer-month");
       const companySelect = document.getElementById("transfer-company");
@@ -1009,7 +931,7 @@
 
       const month = monthSelect ? monthSelect.value : "";
       const company = companySelect ? companySelect.value : "";
-      const filterMethod = methodSelect ? methodSelect.value : "銀行振込"; // デフォルト「銀行振込」
+      const filterMethod = methodSelect ? methodSelect.value : "銀行振込";
 
       if (!month || !company) {
         if (resultArea) {
@@ -1038,7 +960,6 @@
 
         const rawStaffList = res.data || [];
         
-        // 支給方法による絞り込み（フィルター）
         const staffList = rawStaffList.filter(item => {
           if (!filterMethod || filterMethod === "ALL") return true;
           return item.method === filterMethod;
@@ -1059,6 +980,14 @@
                       <option value="ALL" ${filterMethod === 'ALL' ? 'selected' : ''}>すべて表示</option>
                     </select>
                   </div>
+                  <div class="col-auto ml-2">
+                    <button type="button" class="btn btn-success btn-sm font-weight-bold" onclick="generateZenginFile()">
+                      📄 全銀振込データ出力 (.txt)
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm font-weight-bold ml-1" onclick="generateReceiptFile()">
+                      📝 給与受領書作成
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="text-center text-muted p-4">該当する振込対象スタッフが見つかりませんでした。</div>`;
@@ -1070,11 +999,9 @@
         let rowsHtml = "";
 
         staffList.forEach(item => {
-          // 金額の数値変換と合計加算
           const rawNum = typeof item.amount === 'number' ? item.amount : parseFloat(String(item.amount).replace(/[^0-9.-]+/g, "")) || 0;
           totalAmount += rawNum;
 
-          // 数値フォーマット処理（円表記）
           const formattedAmount = "￥" + rawNum.toLocaleString();
 
           rowsHtml += `
@@ -1092,15 +1019,22 @@
             <div class="card bg-light mb-3 border-secondary">
               <div class="card-body p-3">
                 <div class="row align-items-center">
-                  <div class="col-md-6 d-flex align-items-center mb-2 mb-md-0">
-                    <label for="transfer-method-filter" class="font-weight-bold mr-2 m-0 text-dark" style="white-space: nowrap;">支給方法:</label>
-                    <select id="transfer-method-filter" class="form-control form-control-sm w-auto" onchange="loadTransferStaffList()">
+                  <div class="col-md-7 d-flex align-items-center mb-2 mb-md-0">
+                    <label for="transfer-method-filter" class="font-weight-bold mr-2 m-0 text-dark" style="white-space: nowrap;">支給方法絞り込み:</label>
+                    <select id="transfer-method-filter" class="form-control form-control-sm w-auto mr-3" onchange="loadTransferStaffList()">
                       <option value="銀行振込" ${filterMethod === '銀行振込' ? 'selected' : ''}>銀行振込</option>
                       <option value="現金" ${filterMethod === '現金' ? 'selected' : ''}>現金</option>
                       <option value="ALL" ${filterMethod === 'ALL' ? 'selected' : ''}>すべて表示</option>
                     </select>
+                    <!-- 移動・新規追加された操作ボタンエリア -->
+                    <button type="button" class="btn btn-success btn-sm font-weight-bold mr-2" onclick="generateZenginFile()">
+                      📄 全銀振込データ出力 (.txt)
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm font-weight-bold" onclick="generateReceiptFile()">
+                      📝 給与受領書作成
+                    </button>
                   </div>
-                  <div class="col-md-6 text-md-right">
+                  <div class="col-md-5 text-md-right">
                     <span class="h6 font-weight-bold text-dark mr-2">合計支給金額:</span>
                     <span class="h4 font-weight-bold text-primary mb-0">￥${totalAmount.toLocaleString()}</span>
                   </div>
@@ -1137,11 +1071,9 @@
       }
     }
 
-    // 全銀ファイル作成・ダウンロード処理
     async function generateZenginFile() {
       console.log('=== 全銀データ作成処理を開始します ===');
 
-      // 1. 日付の取得と検証
       const dateInput = document.getElementById('transfer-date');
       if (!dateInput || !dateInput.value) {
         alert('振込指定日を選択してください。');
@@ -1153,9 +1085,8 @@
         alert('振込指定日の形式が正しくありません。');
         return;
       }
-      const transferDateMMDD = dateParts[1] + dateParts[2]; // 例: "0525"
+      const transferDateMMDD = dateParts[1] + dateParts[2];
 
-      // 2. 画面上の会社選択・対象月要素を取得
       const companyVal = document.getElementById('transfer-company')?.value || '';
       const monthVal = document.getElementById('transfer-month')?.value || '';
 
@@ -1164,7 +1095,6 @@
         return;
       }
 
-      // 3. 通信実行（callGasラッパー関数を使用）
       try {
         console.log('リクエスト送信中...', { companyName: companyVal, targetMonth: monthVal, transferDate: transferDateMMDD });
 
@@ -1189,7 +1119,41 @@
       }
     }
 
-    // ファイルダウンロード関数
+    // ★ 給与受領書作成実行関数（新規追加）
+    async function generateReceiptFile() {
+      const companyVal = document.getElementById('transfer-company')?.value || '';
+      const monthVal = document.getElementById('transfer-month')?.value || '';
+
+      if (!companyVal || !monthVal) {
+        alert('会社名および対象月度を選択してください。');
+        return;
+      }
+
+      if (!confirm(`${monthVal}月度 [${companyVal}] の現金支給スタッフ向け給与受領書を作成しますか？`)) {
+        return;
+      }
+
+      showLoading(true);
+
+      try {
+        const res = await callGas("createSalaryReceipt", {
+          month: monthVal,
+          company: companyVal
+        });
+
+        showLoading(false);
+
+        if (res && res.success) {
+          alert("✅ " + res.message);
+        } else {
+          alert("❌ 作成エラー: " + (res.error || "処理に失敗しました。"));
+        }
+      } catch (e) {
+        showLoading(false);
+        alert("通信エラーが発生しました: " + e.message);
+      }
+    }
+
     function downloadTextFile(fileName, textData) {
       const blob = new Blob([textData], { type: 'text/plain;charset=shift_jis;' });
       const link = document.createElement('a');
