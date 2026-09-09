@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OFS給与管理システム</title>
+  <title>給与管理システム</title>
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
     body { background-color: #f4f6f9; font-family: 'Helvetica Neue', Arial, sans-serif; }
@@ -25,7 +25,7 @@
 
   <div id="login-screen" class="container mt-5" style="display: none; max-width: 400px;">
     <div class="card p-4">
-      <h3 class="text-center mb-4">OFS給与管理システム</h3>
+      <h3 class="text-center mb-4">給与管理システム</h3>
       <div id="login-err-msg" class="alert alert-danger" style="display: none;">ユーザー名またはパスワードが違います</div>
       <div class="form-group">
         <label for="login-user">ユーザー名</label>
@@ -42,7 +42,7 @@
 
   <div id="main-app" class="container-fluid mt-3" style="display: none;">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 rounded">
-      <span class="navbar-brand font-weight-bold">💰 OFS給与管理システム</span>
+      <span class="navbar-brand font-weight-bold">💰 給与管理システム</span>
       <div class="ml-auto text-white-50 mr-3" style="font-size: 0.9rem;">
         ユーザー: <span id="current-user-display" class="text-white font-weight-bold"></span>
       </div>
@@ -135,7 +135,7 @@
   </div>
 
   <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyI2FjYKHPtc7lPfZvVB4gPQziNImFDlOItMbpade1g4gLtiJXJc4ZCFWa5e7UB0Mv2/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwafJtLVDouol5qOR5GN97cvIqHgbhmQ-8scZ7PSKNC3QpNAKbjXiv8FygxY2Nmf5RS/exec";
     const APP_VERSION = "1.3.15";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
@@ -266,7 +266,13 @@
       }
     }
   
-    function showLoading(show) { document.getElementById('loading').style.display = show ? 'flex' : 'none'; }
+    function showLoading(show, message = "🔄 処理中...") {
+      const loadingEl = document.getElementById('loading');
+      if (loadingEl) {
+        loadingEl.innerHTML = message;
+        loadingEl.style.display = show ? 'flex' : 'none';
+      }
+    }
 
     function switchTab(type) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -759,14 +765,11 @@
     }
 
     function updateProgressMessage(current, total, taskType = "処理", activeName = "") {
-      const loadingEl = document.getElementById('loading');
-      if (!loadingEl) return;
-      
       let msg = `🔄 ${taskType}中... (${current} / ${total} 件完了)`;
       if (activeName) {
         msg += `<br><span style="font-size: 0.9rem; color: #555; font-weight: normal;">現在: ${activeName} さんのデータを処理中...</span>`;
       }
-      loadingEl.innerHTML = msg;
+      showLoading(true, msg);
     }
     
     async function loadStaffList() {
@@ -1071,6 +1074,7 @@
       }
     }
 
+    // ★ 修正：全銀振込データ出力（確認ダイアログ・処理中オーバーレイ・完了ダイアログの追加）
     async function generateZenginFile() {
       console.log('=== 全銀データ作成処理を開始します ===');
 
@@ -1095,6 +1099,15 @@
         return;
       }
 
+      // ① 確認ダイアログ
+      const confirmMessage = `以下の内容で全銀振込データ(.txt)を出力しますか？\n\n・会社名: ${companyVal}\n・対象月度: ${monthVal}\n・振込指定日: ${dateInput.value}`;
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+
+      // ② 処理中オーバーレイ表示
+      showLoading(true, "🔄 全銀振込データ作成中...");
+
       try {
         console.log('リクエスト送信中...', { companyName: companyVal, targetMonth: monthVal, transferDate: transferDateMMDD });
 
@@ -1106,20 +1119,27 @@
 
         console.log('GAS返却結果:', result);
 
+        showLoading(false);
+
         if (result && (result.status === 'success' || result.success)) {
-          downloadTextFile(result.fileName || '全銀振込データ.txt', result.textData || result.data);
+          const fileName = result.fileName || '全銀振込データ.txt';
+          downloadTextFile(fileName, result.textData || result.data);
+          
+          // ③ 完了ダイアログ
+          alert(`✅ 全銀振込データの出力が完了しました！\n（ファイル名: ${fileName}）`);
         } else {
           const errorMsg = (result && (result.message || result.error)) ? (result.message || result.error) : 'データの生成に失敗しました。';
-          alert('エラー: ' + errorMsg);
+          alert('❌ エラー: ' + errorMsg);
         }
 
       } catch (error) {
+        showLoading(false);
         console.error('通信例外エラー:', error);
         alert('通信エラーが発生しました: ' + error.message);
       }
     }
 
-    // ★ 給与受領書作成実行関数（新規追加）
+    // ★ 給与受領書作成実行関数
     async function generateReceiptFile() {
       const companyVal = document.getElementById('transfer-company')?.value || '';
       const monthVal = document.getElementById('transfer-month')?.value || '';
@@ -1133,7 +1153,7 @@
         return;
       }
 
-      showLoading(true);
+      showLoading(true, "🔄 給与受領書作成中...");
 
       try {
         const res = await callGas("createSalaryReceipt", {
