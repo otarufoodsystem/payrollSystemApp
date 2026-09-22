@@ -212,6 +212,46 @@
     async function executeManualLogin() {
       const user = document.getElementById("login-user").value.trim();
       const pass = document.getElementById("login-pass").value.trim();
+      if (!user || !pass) { alert("ユーザー名とパスワードを入力してください。"); return; }
+    
+      showLoading(true);
+      try {
+        const response = await fetch(GAS_API_URL, {
+          method: "POST",
+          body: JSON.stringify({ action: "checkAuth", username: user, password: pass, appVersion: APP_VERSION })
+        });
+    
+        const text = await response.text();
+    
+        // ★ 404エラーページ等のHTMLが返ってきた場合の安全なハンドリング
+        if (text.trim().startsWith("<")) {
+          console.error("GASからHTMLレスポンス（404等）が返却されました:", text);
+          throw new Error("APIのURLが存在しないか、GASのデプロイ設定（アクセス権限: 全員）を確認してください。");
+        }
+    
+        const resData = JSON.parse(text);
+        showLoading(false);
+    
+        if (resData.success) {
+          localStorage.setItem("admin_saved_username", user);
+          localStorage.setItem("admin_saved_password", pass);
+          localStorage.setItem("admin_last_auth_time", Date.now().toString());
+          document.getElementById("login-err-msg").style.display = "none";
+          location.reload();
+        } else {
+          alert("【手動ログイン失敗】理由: " + (resData.error || "ユーザー名またはパスワードが違います。"));
+          document.getElementById("login-err-msg").style.display = "block";
+        }
+      } catch (e) {
+        showLoading(false);
+        alert("【手動ログイン・通信エラー】\nエラー内容: " + e.message);
+      }
+    }
+    
+/*
+    async function executeManualLogin() {
+      const user = document.getElementById("login-user").value.trim();
+      const pass = document.getElementById("login-pass").value.trim();
       if(!user || !pass) { alert("ユーザー名とパスワードを入力してください。"); return; }
 
       showLoading(true);
@@ -237,7 +277,7 @@
         alert("【手動ログイン・通信エラー】\nエラー内容: " + e.message);
       }
     }
-  
+*/  
     function resetTimeoutTimer() {
       if (timeoutTimer) clearTimeout(timeoutTimer);
       if (currentUsername && currentPassword) {
