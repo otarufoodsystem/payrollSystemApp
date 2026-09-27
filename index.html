@@ -806,10 +806,12 @@
 
       if (targets.length === 0) {
         alert("処理対象のスタッフが見つかりません。");
+        showLoading(false);
         return;
       }
 
       if (!confirm(`選択された月度・店舗のスタッフ（全 ${targets.length} 件）の給与明細シートの生成を開始します。よろしいですか？\n※事前に「勤怠データ取得」を完了させておいてください。`)) {
+        showLoading(false);
         return;
       }
 
