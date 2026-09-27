@@ -766,6 +766,31 @@
       if (!month) { alert("対象月度を選択してください。"); return; }
       if (!store) { alert("店舗名を選択してください。"); return; }
 
+      // -------------------------------------------------------------------
+      // ★ 事前チェック：1人でもマスタ未登録者がいれば全処理を中断
+      // -------------------------------------------------------------------
+      showLoading(true, "🔍 スタッフマスタの登録状態を確認中...");
+      try {
+        const checkRes = await callGas("checkStaffMasterConsistency", {
+          store: store,
+          month: month
+        });
+    
+        if (!checkRes || !checkRes.success) {
+          showLoading(false);
+          const errorMsg = (checkRes && checkRes.error) 
+            ? checkRes.error 
+            : "スタッフマスタに未登録のスタッフが存在するため、処理を開始できません。";
+          
+          alert("【給与明細作成エラー】\n" + errorMsg);
+          return; // 全処理をここで終了（1件も作成しない）
+        }
+      } catch (e) {
+        showLoading(false);
+        alert("事前チェック中に通信エラーが発生しました: " + e.message);
+        return;
+      }
+      
       let targets = [];
       if (name === "ALL") {
         globalStaffList.forEach(staff => {
