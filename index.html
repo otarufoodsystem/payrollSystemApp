@@ -135,8 +135,8 @@
   </div>
 
   <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbymLigh5C7QcGbU2fiYth7kY6RvO56o2J5RLZwm0kFEo1E0BsXGuA6nKgn7Am6HW13D/exec";
-    const APP_VERSION = "1.3.40";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzuwJTHH2RDVvEoZ-Yb_pMmLtcMtDDnDiTYSIsff0seY4ayHYR65mngXrqBTOIrRSY4/exec";
+    const APP_VERSION = "1.3.41";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -248,36 +248,6 @@
       }
     }
     
-/*
-    async function executeManualLogin() {
-      const user = document.getElementById("login-user").value.trim();
-      const pass = document.getElementById("login-pass").value.trim();
-      if(!user || !pass) { alert("ユーザー名とパスワードを入力してください。"); return; }
-
-      showLoading(true);
-      try {
-        const response = await fetch(GAS_API_URL, {
-          method: "POST",
-          body: JSON.stringify({ action: "checkAuth", username: user, password: pass, appVersion: APP_VERSION })
-        });
-        const resData = await response.json();
-        showLoading(false);
-        if(resData.success) {
-          localStorage.setItem("admin_saved_username", user);
-          localStorage.setItem("admin_saved_password", pass);
-          localStorage.setItem("admin_last_auth_time", Date.now().toString());
-          document.getElementById("login-err-msg").style.display = "none";
-          location.reload();
-        } else {
-          alert("【手動ログイン失敗】理由: " + (resData.error || "ユーザー名またはパスワードが違います。"));
-          document.getElementById("login-err-msg").style.display = "block";
-        }
-      } catch(e) {
-        showLoading(false);
-        alert("【手動ログイン・通信エラー】\nエラー内容: " + e.message);
-      }
-    }
-*/  
     function resetTimeoutTimer() {
       if (timeoutTimer) clearTimeout(timeoutTimer);
       if (currentUsername && currentPassword) {
@@ -413,45 +383,7 @@
         }
       }
     }    
-/*
-    async function callGasWithRetry(action, data = null, retries = 3, interval = 1500) {
-      const savedUser = localStorage.getItem("admin_saved_username") || "";
-      const savedPass = localStorage.getItem("admin_saved_password") || "";
-      const payload = { action: action, username: savedUser, password: savedPass };
-      if (data !== null) payload.data = data;
 
-      for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-          const response = await fetch(GAS_API_URL, { method: "POST", body: JSON.stringify(payload) });
-          const resData = await response.json();
-          
-          if (resData.authError) {
-            clearAuthStorage();
-            alert("セッションの有効期限が切れました。再ログインしてください。");
-            location.reload();
-            throw new Error("Auth Error");
-          }
-          
-          if (!resData.success) {
-            throw new Error(resData.error || "処理に失敗しました");
-          }
-          
-          localStorage.setItem("admin_last_auth_time", Date.now().toString());
-          return resData;
-        } catch (error) {
-          if (error.message === "Auth Error") throw error;
-
-          if (attempt < retries) {
-            console.warn(`通信失敗 (${attempt}/${retries}回目): ${error.message}。${interval}ms後に再試行します...`);
-            await new Promise(resolve => setTimeout(resolve, interval));
-          } else {
-            console.error(`最大リトライ回数(${retries}回)に達したため失敗しました:`, error);
-            throw error;
-          }
-        }
-      }
-    }
-*/
     function initSalaryForm() {
       const monthSelect = document.getElementById("salary-month");
       if (!monthSelect) return;
