@@ -91,7 +91,19 @@
             📊 給与明細一覧作成
           </button>
         </div>
-
+        <div class="form-row align-items-center mt-3 pt-3 border-top">
+          <div class="col-md-5 mb-2">
+            <label for="salary-company-select" class="font-weight-bold m-0 mb-1">会社選択 <span class="text-danger">*</span></label>
+            <select id="salary-company-select" class="form-control">
+              <option value="">-- 会社を選択してください --</option>
+            </select>
+          </div>
+          <div class="col-md-7 mb-2 d-flex align-items-end" style="height: 100%;">
+            <button type="button" id="btn-company-summary" class="btn btn-warning font-weight-bold w-100 mt-md-4" onclick="handleCreateCompanySummaryList()">
+              🏢 会社別給与明細一覧作成
+            </button>
+          </div>
+        </div>
       </div>
       <div id="salary-result-area" class="card p-4">
         <div class="text-center text-muted">
@@ -135,8 +147,8 @@
   </div>
 
   <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzBhNbAvLd7mCSkg18aMy8f5v4Bobb5r2mJreV1bIxaiI49OsBtdLEXuRu6TFAA5biM/exec";
-    const APP_VERSION = "1.3.47";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzMbm1kOWct4pypPkBqWLCAQrQDuJprptuzNjouYVHmqMuzQkKyhqnfH6K8v63SkHqd/exec";
+    const APP_VERSION = "1.3.48";
     const TEN_MINUTES = 10 * 60 * 1000;
     const SALARY_SPREADSHEET_ID = "1_BACpUP-ReKQQV2ywDm7nvU25Y8eYxrPfYLW8xxfd60"; 
 
@@ -385,6 +397,7 @@
     }    
 
     function initSalaryForm() {
+      await loadSalaryCompanyList();
       const monthSelect = document.getElementById("salary-month");
       if (!monthSelect) return;
       monthSelect.innerHTML = "";
@@ -416,7 +429,28 @@
       
       rebuildSalaryStoreSelect(document.getElementById("salary-store"));
     }
-  
+
+    // 給与計算タブ初期化時に会社リストをロードするように追加
+    async function loadSalaryCompanyList() {
+      const companySelect = document.getElementById("salary-company-select");
+      if (!companySelect) return;
+    
+      try {
+        const res = await callGas("getCompanyList");
+        if (res && res.success) {
+          companySelect.innerHTML = '<option value="">-- 会社を選択してください --</option>';
+          (res.data || []).forEach(company => {
+            const opt = document.createElement("option");
+            opt.value = company;
+            opt.innerText = company;
+            companySelect.appendChild(opt);
+          });
+        }
+      } catch (e) {
+        console.error("会社マスタの取得に失敗しました", e);
+      }
+    }
+    
     function rebuildSalaryStoreSelect(storeSelect) {
       if (!storeSelect) return;
       storeSelect.innerHTML = '<option value="">-- 店舗を選択してください（必須） --</option>';
@@ -1235,6 +1269,59 @@
       link.click();
       document.body.removeChild(link);
     }
+
+    // 会社別給与明細一覧作成ボタンの押下処理
+    async function handleCreateCompanySummaryList() {
+      const monthSelect = document.getElementById("salary-month");
+      const companySelect = document.getElementById("salary-company-select");
+      const resultArea = document.getElementById("salary-result-area");
+      const companyBtn = document.getElementById("btn-company-summary");
+    
+      const selectedMonth = monthSelect ? monthSelect.value : "";
+      const selectedCompany = companySelect ? companySelect.value : "";
+    
+      if (!selectedMonth) {
+        alert("対象月度を選択してください。");
+        return;
+      }
+      if (!selectedCompany) {
+        alert("会社を選択してください。");
+        return;
+      }
+    
+      if (!confirm(`${selectedMonth}月度 [${selectedCompany}] の「会社別給与明細一覧」を作成しますか？\n※該当する店舗の給与ファイルからデータを統合します。`)) {
+        return;
+      }
+    
+      showLoading(true, `🏢 [${selectedCompany}] 会社別給与明細一覧シートを作成中...`);
+      if (companyBtn) companyBtn.disabled = true;
+    
+      try {
+        const res = await callGas("createCompanySalarySummaryList", {
+          month: selectedMonth,
+          company: selectedCompany
+        });
+    
+        showLoading(false);
+        if (companyBtn) companyBtn.disabled = false;
+    
+        if (res && res.success) {
+          alert("✅ " + res.message);
+          if (resultArea) {
+            resultArea.innerHTML = `<div class="alert alert-success font-weight-bold p-3">${res.message}</div>`;
+          }
+        } else {
+          alert("❌ 作成エラー: " + (res.error || "処理に失敗しました。"));
+          if (resultArea) {
+            resultArea.innerHTML = `<div class="alert alert-danger font-weight-bold p-3">${res.error}</div>`;
+          }
+        }
+      } catch (e) {
+        showLoading(false);
+        if (companyBtn) companyBtn.disabled = false;
+        alert("通信エラーが発生しました: " + e.message);
+      }
+    }  
   </script>
 </body>
 </html>
