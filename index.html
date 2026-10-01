@@ -396,7 +396,7 @@
       }
     }    
 
-    function initSalaryForm() {
+    async function initSalaryForm() {
       await loadSalaryCompanyList();
       const monthSelect = document.getElementById("salary-month");
       if (!monthSelect) return;
